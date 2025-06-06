@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from blog.models import Blog, Section, Comment
-from .models import Admin
+from blog.models import Blog, Comment,Admin
+# from .models import Admin
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,7 +18,7 @@ class AdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Admin
-        fields = ('id', 'user', 'uuid', 'is_active', 'created_at', 'updated_at')
+        fields = ('id', 'user', 'uuid', 'created_at', 'updated_at')
         read_only_fields = ('uuid', 'created_at', 'updated_at')
 
     def create(self, validated_data):
@@ -42,27 +42,25 @@ class CommentSerializer(serializers.ModelSerializer):
             return CommentSerializer(replies, many=True).data
         return []
 
-class SectionSerializer(serializers.ModelSerializer):
-    comments = CommentSerializer(many=True, read_only=True)
+# class SectionSerializer(serializers.ModelSerializer):
+#     comments = CommentSerializer(many=True, read_only=True)
 
-    class Meta:
-        model = Section
-        fields = ('id', 'title', 'content', 'order', 'section_type', 'comments', 'created_at', 'updated_at','blog_id')
+#     class Meta:
+#         model = Section
+#         fields = ('id', 'title', 'content', 'order', 'section_type', 'comments', 'created_at', 'updated_at','blog_id')
 
-class Section_list_Serializer(serializers.ModelSerializer):
-    class Meta:
-        model = Section
-        fields = ('id', 'title', 'content', 'order', 'section_type', 'created_at', 'updated_at','blog_id')
+# class Section_list_Serializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Section
+#         fields = ('id', 'title', 'content', 'order', 'section_type', 'created_at', 'updated_at','blog_id')
 
 class BlogSerializer(serializers.ModelSerializer):
-    author = UserSerializer(read_only=True)
-    sections = SectionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Blog
-        fields = ('id', 'admin', 'title', 'content', 'slug', 'status', 
-                 'created_at', 'updated_at', 'published_at')
-        read_only_fields = ('admin', 'created_at', 'updated_at', 'published_at')
+        fields = ('id', 'title', 'content', 'slug', 'status', 
+                 'created_at', 'updated_at', 'published_at' )
+        read_only_fields = ('created_at', 'updated_at', 'published_at')
 
     def create(self, validated_data):
         request = self.context.get('request')
@@ -81,10 +79,10 @@ class BlogCreateSerializer(serializers.ModelSerializer):
         model = Blog
         fields = ('title',)
 
-class SectionCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Section
-        fields = ('title', 'content', 'order', 'section_type')
+# class SectionCreateSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Section
+#         fields = ('title', 'content', 'order', 'section_type')
 
 class CommentCreateSerializer(serializers.ModelSerializer):
     class Meta:
