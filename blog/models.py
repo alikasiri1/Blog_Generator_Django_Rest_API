@@ -1,13 +1,15 @@
 from django.db import models
-
-# Create your models here.
-from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
 import uuid
 
+class CustomUser(AbstractUser):
+    email = models.EmailField(unique=True)
+    
+    def __str__(self):
+        return self.username
 
 class Admin(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null = True , blank = True)
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -65,7 +67,7 @@ class Comment(models.Model):
     # section = models.ForeignKey(Section, related_name='comments', on_delete=models.CASCADE)
     blog = models.ForeignKey(Blog, related_name='sections', on_delete=models.CASCADE, null = True , blank = True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

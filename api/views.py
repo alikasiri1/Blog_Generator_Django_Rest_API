@@ -6,10 +6,10 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view ,  permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from blog.models import Blog, Comment,Admin
+from blog.models import Blog, Comment,Admin,CustomUser
 from .serializers import (
     BlogSerializer, BlogCreateSerializer,
-    CommentSerializer, CommentCreateSerializer,
+    CommentSerializer,
     Blog_List_Serializer 
 )
 import openai
@@ -19,6 +19,7 @@ from django.utils import timezone
 from .serializers import AdminSerializer, UserSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 
 class AdminViewSet(viewsets.ModelViewSet):
@@ -374,3 +375,21 @@ class CommentViewSet(viewsets.ModelViewSet):
         section_id = self.request.data.get('section')
         section = get_object_or_404(Section, id=section_id)
         serializer.save(user=self.request.user, section=section) 
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        # Get username from request data
+        username = request.data.get('username')
+        
+        # Get the user from the username
+        try:
+            user = CustomUser.objects.get(username=username)
+            admin = Admin.objects.get(user=user) 
+            # Add admin UUID to the response
+            response.data['admin_uuid'] = str(admin.uuid)
+        except (CustomUser.DoesNotExist, Admin.DoesNotExist):
+            response.data['admin_uuid'] = None
+            
+        return response 

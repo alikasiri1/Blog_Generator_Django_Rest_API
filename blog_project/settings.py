@@ -137,4 +137,7 @@ CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 CORS_ALLOW_CREDENTIALS = True
 
 # OpenAI settings
-OPENAI_API_KEY = config('OPENAI_API_KEY', default='') 
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+
+# Custom user model
+AUTH_USER_MODEL = 'blog.CustomUser' 

@@ -1,17 +1,21 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from blog.models import Blog, Comment,Admin
+# from django.contrib.auth.models import User
+from blog.models import Blog, Comment, Admin, CustomUser
 # from .models import Admin
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
+        model = CustomUser
         fields = ('id', 'username', 'email', 'password')
-        extra_kwargs = {'password': {'write_only': True}}
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True}
+        }
 
     def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)
+        user = CustomUser.objects.create_user(**validated_data)
         return user
+
 
 class AdminSerializer(serializers.ModelSerializer):
     user = UserSerializer()
