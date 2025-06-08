@@ -46,25 +46,13 @@ class CommentSerializer(serializers.ModelSerializer):
             return CommentSerializer(replies, many=True).data
         return []
 
-# class SectionSerializer(serializers.ModelSerializer):
-#     comments = CommentSerializer(many=True, read_only=True)
-
-#     class Meta:
-#         model = Section
-#         fields = ('id', 'title', 'content', 'order', 'section_type', 'comments', 'created_at', 'updated_at','blog_id')
-
-# class Section_list_Serializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Section
-#         fields = ('id', 'title', 'content', 'order', 'section_type', 'created_at', 'updated_at','blog_id')
-
 class BlogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Blog
         fields = ('id', 'title', 'content', 'slug', 'status', 
                  'created_at', 'updated_at', 'published_at' )
-        read_only_fields = ('created_at', 'updated_at', 'published_at')
+        read_only_fields = ('id' ,'created_at', 'updated_at', 'published_at')
 
     def create(self, validated_data):
         request = self.context.get('request')
@@ -74,9 +62,17 @@ class BlogSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class Blog_List_Serializer(serializers.ModelSerializer):
+    content = serializers.SerializerMethodField()
     class Meta:
         model = Blog
-        fields = ('id', 'title', 'status', 'created_at', 'updated_at')
+        fields = ('id', 'title', 'status', 'created_at', 'updated_at', 'content')
+    
+    def get_content(self, obj):
+        # Return first 17 characters of content
+        if obj.content:
+            return obj.content[:17]
+        else:
+            return ''
 
 class BlogCreateSerializer(serializers.ModelSerializer):
     class Meta:
