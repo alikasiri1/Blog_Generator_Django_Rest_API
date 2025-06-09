@@ -29,7 +29,7 @@ class Blog(models.Model):
     admin = models.ForeignKey(Admin, on_delete=models.CASCADE, related_name='blogs', null = True , blank = True)
     title = models.CharField(max_length=200)
     content = models.TextField(null = True , blank = True)
-    slug = models.SlugField(max_length=200, unique=True, null = True , blank = True)
+    slug = models.SlugField(max_length=200, null = True , blank = True)
     image_url = models.URLField(max_length=500, null=True, blank=True) 
     # image = models.ImageField(upload_to='blog_images/', null=True, blank=True)  # added image field
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
@@ -52,7 +52,7 @@ class Blog(models.Model):
             base_slug = slugify(self.title)
             slug = base_slug
             counter = 1
-            while Blog.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+            while Blog.objects.filter(slug=slug, admin=self.admin).exclude(pk=self.pk).exists():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             self.slug = slug
@@ -60,8 +60,10 @@ class Blog(models.Model):
 
 
 
+
     class Meta:
         ordering = ['-created_at']
+        unique_together = ('admin', 'slug')  # slug unique per admin
 
     def __str__(self):
         return self.title

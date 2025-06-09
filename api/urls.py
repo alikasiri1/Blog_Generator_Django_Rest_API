@@ -12,7 +12,6 @@ admin_router.register(r'blogs', BlogViewSet, basename='admin-blog')
 # admin_router.register(r'sections', SectionViewSet, basename='admin-section')
 admin_router.register(r'comments', CommentViewSet, basename='admin-comment')
 admin_router.register(r'profile', AdminViewSet, basename='admin')
-# admin_router.register(r'admin-profile', AdminViewSet, basename='admin-profile')
 
 # Public router for viewing published blogs
 public_router = DefaultRouter()
@@ -28,9 +27,9 @@ urlpatterns = [
 
 
     path('admin/profile/', AdminViewSet.as_view({'patch': 'profile'}), name='admin-profile'),
-    # Admin routes using work_domain instead of uuid
-    path('<slug:work_domain>/admin/', include(admin_router.urls)),
 
+    path('<uuid:admin_uuid>/admin/', include(admin_router.urls)),
+    
     # Public routes also by work_domain
     path('<slug:work_domain>/', include(public_router.urls)),
     
