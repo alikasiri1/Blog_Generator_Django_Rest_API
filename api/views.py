@@ -12,7 +12,7 @@ from .serializers import (
     CommentSerializer,
     Blog_List_Serializer 
 )
-from .generator import (
+from .generator import ( 
     generate_blog_by_promt,
     generate_blog_by_topic,
     regenerate_blog_by_feedback
@@ -59,6 +59,7 @@ class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = BlogSerializer
     permission_classes = [AllowAny]
+    lookup_field = 'slug'
 
     def get_queryset(self):
         admin_uuid = self.kwargs.get('admin_uuid')
@@ -68,9 +69,10 @@ class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
 class BlogViewSet(viewsets.ModelViewSet):
     serializer_class = BlogSerializer
     permission_classes = [IsAuthenticated]
+    lookup_field = 'slug'
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid')
+        admin_uuid = self.kwargs.get('admin_uuid') 
         admin = get_object_or_404(Admin, uuid=admin_uuid)
         
         # Ensure the authenticated user is the admin
@@ -89,13 +91,13 @@ class BlogViewSet(viewsets.ModelViewSet):
         admin = get_object_or_404(Admin, uuid=admin_uuid)
         
         # Ensure the authenticated user is the admin
-        if admin.user != self.request.user:
+        if admin.user != self.request.user: 
             raise permissions.PermissionDenied("You are not authorized to create blogs for this admin.")
             
         serializer.save(admin=admin)
 
     @action(detail=True, methods=['post'])
-    def publish(self, request, pk=None, admin_uuid=None):
+    def publish(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
         if blog.admin.user != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
@@ -106,7 +108,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         return Response(BlogSerializer(blog).data)
 
     @action(detail=True, methods=['post'])
-    def unpublish(self, request, pk=None, admin_uuid=None):
+    def unpublish(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
         if blog.admin.user != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
@@ -115,9 +117,10 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog.published_at = None
         blog.save()
         return Response(BlogSerializer(blog).data)
+    
 
     @action(detail=True, methods=['post'])
-    def generate_content(self, request, pk=None, admin_uuid=None):
+    def generate_content(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
         topic = request.data.get('topic')
         
@@ -144,7 +147,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     @action(detail=True, methods=['post'])
-    def generate_content_by_promt(self, request, pk=None, admin_uuid=None):
+    def generate_content_by_promt(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
         promt = request.data.get('promt')
         topic = request.data.get('topic')
@@ -171,7 +174,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         
 
     @action(detail=True, methods=['post'])
-    def regenerate_content(self, request, pk=None, admin_uuid=None):
+    def regenerate_content(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
         feedback = request.data.get('feedback')
         

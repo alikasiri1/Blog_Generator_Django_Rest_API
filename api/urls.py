@@ -7,7 +7,7 @@ from .views import (
 )
 
 # Admin router for authenticated admin operations
-admin_router = DefaultRouter()
+admin_router = DefaultRouter() 
 admin_router.register(r'blogs', BlogViewSet, basename='admin-blog')
 # admin_router.register(r'sections', SectionViewSet, basename='admin-section')
 admin_router.register(r'comments', CommentViewSet, basename='admin-comment')
@@ -24,9 +24,10 @@ urlpatterns = [
     
     # Admin registration endpoint
     path('register/', AdminViewSet.as_view({'post': 'register'}), name='admin-register'),
-    
+
     # Admin-specific endpoints (requires authentication)
-    path('<uuid:admin_uuid>/admin/', include(admin_router.urls)),
+
+    path('<uuid:admin_uuid>/admin/', include(admin_router.urls)), 
     
     # Public endpoints (no authentication required)
     path('<uuid:admin_uuid>/', include(public_router.urls)),

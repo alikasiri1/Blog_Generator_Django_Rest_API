@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils.text import slugify
 import uuid
 
 class CustomUser(AbstractUser):
@@ -34,6 +35,29 @@ class Blog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     published_at = models.DateTimeField(null=True, blank=True)
+
+    # def save(self, *args, **kwargs):
+    #     if not self.slug:
+    #         base_slug = slugify(self.title)
+    #         self.slug = base_slug
+    #         counter = 1
+    #         while Blog.objects.filter(slug=self.slug).exists():
+    #             self.slug = f"{base_slug}-{counter}"
+    #             counter += 1
+    #     super().save(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        if not self.slug or Blog.objects.get(pk=self.pk).title != self.title:
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            while Blog.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+
 
     class Meta:
         ordering = ['-created_at']

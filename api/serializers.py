@@ -65,7 +65,7 @@ class Blog_List_Serializer(serializers.ModelSerializer):
     content = serializers.SerializerMethodField()
     class Meta:
         model = Blog
-        fields = ('id', 'title', 'status', 'created_at', 'updated_at', 'content')
+        fields = ('id', 'title', 'status','slug', 'created_at', 'updated_at', 'content')
     
     def get_content(self, obj):
         # Return first 17 characters of content
