@@ -47,10 +47,23 @@ class AdminViewSet(viewsets.ModelViewSet):
             user = serializer.save()
             admin = Admin.objects.create(user=user)
             return Response({
-                'user': UserSerializer(user).data,
                 'admin': AdminSerializer(admin).data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['patch'])
+    def profile(self, request):
+        """
+        PATCH /api/admins/profile/
+        Updates the admin's profile and user fields.
+        """
+        admin = Admin.objects.get(user=request.user) 
+        serializer = self.get_serializer(admin, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -62,8 +75,8 @@ class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'slug'
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
+        work_domain = self.kwargs.get('work_domain')
+        admin = get_object_or_404(Admin, work_domain=work_domain)
         return Blog.objects.filter(admin=admin, status='published')
 
 class BlogViewSet(viewsets.ModelViewSet):
@@ -72,8 +85,8 @@ class BlogViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid') 
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
+        work_domain = self.kwargs.get('work_domain') 
+        admin = get_object_or_404(Admin, work_domain=work_domain)
         
         # Ensure the authenticated user is the admin
         if admin.user != self.request.user:
@@ -87,8 +100,8 @@ class BlogViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        admin_uuid = self.kwargs.get('admin_uuid')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
+        work_domain = self.kwargs.get('work_domain')
+        admin = get_object_or_404(Admin, work_domain=work_domain)
         
         # Ensure the authenticated user is the admin
         if admin.user != self.request.user: 
@@ -97,7 +110,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         serializer.save(admin=admin)
 
     @action(detail=True, methods=['post'])
-    def publish(self, request, slug=None, admin_uuid=None):
+    def publish(self, request, slug=None, work_domain=None):
         blog = self.get_object()
         if blog.admin.user != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
@@ -108,7 +121,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         return Response(BlogSerializer(blog).data)
 
     @action(detail=True, methods=['post'])
-    def unpublish(self, request, slug=None, admin_uuid=None):
+    def unpublish(self, request, slug=None, work_domain=None):
         blog = self.get_object()
         if blog.admin.user != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
@@ -120,7 +133,7 @@ class BlogViewSet(viewsets.ModelViewSet):
     
 
     @action(detail=True, methods=['post'])
-    def generate_content(self, request, slug=None, admin_uuid=None):
+    def generate_content(self, request, slug=None, work_domain=None):
         blog = self.get_object()
         topic = request.data.get('topic')
         
@@ -147,7 +160,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     @action(detail=True, methods=['post'])
-    def generate_content_by_promt(self, request, slug=None, admin_uuid=None):
+    def generate_content_by_promt(self, request, slug=None, work_domain=None):
         blog = self.get_object()
         promt = request.data.get('promt')
         topic = request.data.get('topic')
@@ -174,7 +187,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         
 
     @action(detail=True, methods=['post'])
-    def regenerate_content(self, request, slug=None, admin_uuid=None):
+    def regenerate_content(self, request, slug=None, work_domain=None):
         blog = self.get_object()
         feedback = request.data.get('feedback')
         
@@ -204,8 +217,8 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
+        work_domain = self.kwargs.get('work_domain')
+        admin = get_object_or_404(Admin, work_domain=work_domain)
         
         # Ensure the authenticated user is the admin
         if admin.user != self.request.user:
@@ -229,9 +242,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             user = CustomUser.objects.get(username=username)
             admin = Admin.objects.get(user=user) 
-            # Add admin UUID to the response
+            # Add admin work_domain to the response
+            response.data['work_domain'] = str(admin.work_domain)
             response.data['admin_uuid'] = str(admin.uuid)
         except (CustomUser.DoesNotExist, Admin.DoesNotExist):
+            response.data['work_domain'] = None
             response.data['admin_uuid'] = None
             
         return response 

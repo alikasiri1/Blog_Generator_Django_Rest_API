@@ -1,12 +1,13 @@
 from rest_framework import serializers
 # from django.contrib.auth.models import User
 from blog.models import Blog, Comment, Admin, CustomUser
+from django.utils.text import slugify
 # from .models import Admin
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ('id', 'username', 'email', 'password')
+        fields = ('id', 'username', 'email', 'password', 'first_name' , 'last_name')
         extra_kwargs = {
             'password': {'write_only': True},
             'email': {'required': True}
@@ -15,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = CustomUser.objects.create_user(**validated_data)
         return user
+    
 
 
 class AdminSerializer(serializers.ModelSerializer):
@@ -22,7 +24,7 @@ class AdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Admin
-        fields = ('id', 'user', 'uuid', 'created_at', 'updated_at')
+        fields = ('id', 'user', 'uuid', 'created_at', 'updated_at' , 'work_domain')
         read_only_fields = ('uuid', 'created_at', 'updated_at')
 
     def create(self, validated_data):
@@ -30,6 +32,25 @@ class AdminSerializer(serializers.ModelSerializer):
         user = UserSerializer().create(user_data)
         admin = Admin.objects.create(user=user, **validated_data)
         return admin
+    
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        user = instance.user
+
+        # Update user fields
+        for attr, value in user_data.items():
+            if attr == 'password':
+                user.set_password(value)
+            else:
+                setattr(user, attr, value)
+        user.save()
+
+        # Update admin fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        return instance
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

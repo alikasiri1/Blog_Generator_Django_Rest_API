@@ -12,6 +12,7 @@ class CustomUser(AbstractUser):
 class Admin(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    work_domain = models.SlugField(max_length=50, unique=True, null = True , blank = True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
