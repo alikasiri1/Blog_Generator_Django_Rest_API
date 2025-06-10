@@ -13,6 +13,7 @@ class Admin(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     work_domain = models.SlugField(max_length=50, unique=True, null = True , blank = True)
+    image = models.ImageField(upload_to='admin_images/', null=True, blank=True) 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -31,21 +32,11 @@ class Blog(models.Model):
     content = models.TextField(null = True , blank = True)
     slug = models.SlugField(max_length=200, null = True , blank = True)
     image_url = models.URLField(max_length=500, null=True, blank=True) 
-    # image = models.ImageField(upload_to='blog_images/', null=True, blank=True)  # added image field
+    image = models.ImageField(upload_to='blog_images/', null=True, blank=True)  
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     published_at = models.DateTimeField(null=True, blank=True)
-
-    # def save(self, *args, **kwargs):
-    #     if not self.slug:
-    #         base_slug = slugify(self.title)
-    #         self.slug = base_slug
-    #         counter = 1
-    #         while Blog.objects.filter(slug=self.slug).exists():
-    #             self.slug = f"{base_slug}-{counter}"
-    #             counter += 1
-    #     super().save(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         if not self.slug or Blog.objects.get(pk=self.pk).title != self.title:

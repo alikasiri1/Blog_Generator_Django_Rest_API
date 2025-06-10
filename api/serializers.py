@@ -21,10 +21,11 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AdminSerializer(serializers.ModelSerializer):
     user = UserSerializer()
+    image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Admin
-        fields = ('id', 'user', 'uuid', 'created_at', 'updated_at' , 'work_domain')
+        fields = ('id', 'user', 'uuid', 'created_at', 'updated_at' , 'work_domain', 'image')
         read_only_fields = ('uuid', 'created_at', 'updated_at')
 
     def create(self, validated_data):
@@ -68,11 +69,12 @@ class CommentSerializer(serializers.ModelSerializer):
         return []
 
 class BlogSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Blog
         fields = ('id', 'title', 'content', 'slug', 'status', 
-                 'created_at', 'updated_at', 'published_at' )
+                 'created_at', 'updated_at', 'published_at' , 'image' , 'image_url')
         read_only_fields = ('id' ,'created_at', 'updated_at', 'published_at')
 
     def create(self, validated_data):
@@ -84,9 +86,10 @@ class BlogSerializer(serializers.ModelSerializer):
 
 class Blog_List_Serializer(serializers.ModelSerializer):
     content = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True)
     class Meta:
         model = Blog
-        fields = ('id', 'title', 'status','slug', 'created_at', 'updated_at', 'content')
+        fields = ('id', 'title', 'status','slug', 'created_at', 'updated_at', 'content' , 'image', 'image_url') 
     
     def get_content(self, obj):
         # Return first 17 characters of content

@@ -26,12 +26,13 @@ from .serializers import AdminSerializer, UserSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
-
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 class AdminViewSet(viewsets.ModelViewSet):
     queryset = Admin.objects.all()
     serializer_class = AdminSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
 
     def get_permissions(self):
@@ -91,6 +92,7 @@ class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
 class BlogViewSet(viewsets.ModelViewSet):
     serializer_class = BlogSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = 'slug'
 
     def get_queryset(self):
@@ -154,10 +156,11 @@ class BlogViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def generate_content(self, request, slug=None, admin_uuid=None):
+        blog = self.get_object()
+
         if blog.admin.user != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
-        blog = self.get_object()
         topic = request.data.get('topic')
         
         if not topic:

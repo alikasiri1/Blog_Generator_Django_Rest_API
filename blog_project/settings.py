@@ -44,6 +44,9 @@ INSTALLED_APPS = [
     # Local apps
     'blog',
     'api',
+    # Cloud Storage Images
+    'cloudinary',
+    'cloudinary_storage',
 ]
 
 MIDDLEWARE = [
@@ -141,3 +144,12 @@ OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 
 # Custom user model
 AUTH_USER_MODEL = 'blog.CustomUser' 
+
+# cloud storage images
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ['CLOUD_NAME'] ,
+    'API_KEY': os.environ['CLOUD_API_KEY'] ,
+    'API_SECRET': os.environ['CLOUD_API_SECRET'] ,
+}
