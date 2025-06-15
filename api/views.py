@@ -19,6 +19,7 @@ from .generator import (
     regenerate_blog_by_feedback,
     generate_topic
 )
+from .image_generator import Image_generator
 import openai
 from django.conf import settings
 import cohere
@@ -135,12 +136,10 @@ class BlogViewSet(viewsets.ModelViewSet):
             
         serializer.save(admin=admin)
 
-    @action(detail=False, methods=['post'])  # Only allow POST requests
-    def generate_topic(self, request , admin_uuid=None):
+    @action(detail=False, methods=['post'])
+    def generate_topic(self, request, admin_uuid=None):
         try:
-            # Parse the JSON data from the request body
-            # data = json.loads(request.body)
-            prompt = request.data.get('prompt')# data.get('prompt', '').strip()
+            prompt = request.data.get('prompt')
             
             if not prompt:
                 return JsonResponse({
@@ -148,21 +147,51 @@ class BlogViewSet(viewsets.ModelViewSet):
                     'status': 'failed'
                 }, status=400)
             
-            # Here you would typically process the prompt and generate a response
-            # For demonstration, we'll just echo it back with some processing
-            # response_text = generate_topic(prompt)
+            # Get the admin
+            admin = get_object_or_404(Admin, uuid=admin_uuid)
+            if admin.user != self.request.user:
+                raise PermissionDenied("You are not authorized to access this admin profile.")
+            
+            # try:
+            #     image_generator = Image_generator()
+            #     task_id = image_generator.create_task_image("A serene lake at sunrise")
+            #     if not task_id:
+            #         image_url = ""
+            #     image_info = image_generator.check_status()
+            #     image_url = image_info['data']['response']['resultUrls'][0]
+            #     # image_generator.download(image_info, 'lake.png')
+            # except:
+            #     image_url = ""
+            image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+            # Simulate topic generation (replace with your actual logic)
+            # topic = generate_topic(prompt)
             time.sleep(4)
-            response_text = f"{prompt}. This is a simulated response."
+            topic = f"{prompt}. This is a simulated response."
             
-            # In a real implementation, you might call an AI service here:
-            # response_text = call_ai_service(prompt)
+            # Create a blog with the generated topic
+            blog_data = {
+                'title': topic,  # Using response as title
+                'image_url': image_url,
+            }
             
-            return JsonResponse({
-                'status': 'success',
-                'prompt': prompt,
-                'response': response_text,
-                'timestamp': timezone.now().isoformat()
-            })
+            # Use your serializer to create the blog
+            serializer = BlogSerializer(data=blog_data, context={'request': request})
+            if serializer.is_valid():
+                blog = serializer.save()
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'prompt': prompt,
+                    'response': topic,
+                    'blog_slug': blog.slug,
+                    'timestamp': timezone.now().isoformat()
+                })
+            else:
+                return JsonResponse({
+                    'error': 'Failed to create blog',
+                    'details': serializer.errors,
+                    'status': 'failed'
+                }, status=400)
             
         except json.JSONDecodeError:
             return JsonResponse({
@@ -253,10 +282,11 @@ class BlogViewSet(viewsets.ModelViewSet):
 
         try:
             
-            content = generate_blog_by_topic(topic)
+            # content = generate_blog_by_topic(topic)
+            content = "this is a content test"
             print(content)
             blog.title = topic
-            blog.slug = slugify(topic)
+            # blog.slug = slugify(topic)
             blog.content = ''.join(content.split('\n\n'))
             blog.save()
             
