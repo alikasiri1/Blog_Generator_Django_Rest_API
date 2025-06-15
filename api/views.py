@@ -16,7 +16,8 @@ from .serializers import (
 from .generator import ( 
     generate_blog_by_promt,
     generate_blog_by_topic,
-    regenerate_blog_by_feedback
+    regenerate_blog_by_feedback,
+    generate_topic
 )
 import openai
 from django.conf import settings
@@ -27,6 +28,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.http import JsonResponse
+import json
+import time
 
 class AdminViewSet(viewsets.ModelViewSet):
     queryset = Admin.objects.all()
@@ -131,6 +135,84 @@ class BlogViewSet(viewsets.ModelViewSet):
             
         serializer.save(admin=admin)
 
+    @action(detail=False, methods=['post'])  # Only allow POST requests
+    def generate_topic(self, request , admin_uuid=None):
+        try:
+            # Parse the JSON data from the request body
+            # data = json.loads(request.body)
+            prompt = request.data.get('prompt')# data.get('prompt', '').strip()
+            
+            if not prompt:
+                return JsonResponse({
+                    'error': 'Prompt is required',
+                    'status': 'failed'
+                }, status=400)
+            
+            # Here you would typically process the prompt and generate a response
+            # For demonstration, we'll just echo it back with some processing
+            # response_text = generate_topic(prompt)
+            time.sleep(4)
+            response_text = f"{prompt}. This is a simulated response."
+            
+            # In a real implementation, you might call an AI service here:
+            # response_text = call_ai_service(prompt)
+            
+            return JsonResponse({
+                'status': 'success',
+                'prompt': prompt,
+                'response': response_text,
+                'timestamp': timezone.now().isoformat()
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'error': 'Invalid JSON data',
+                'status': 'failed'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'error': str(e),
+                'status': 'failed'
+            }, status=500)
+    
+
+    @action(detail=False, methods=['post'])
+    def generate_contents(self, request, admin_uuid=None):
+        print(request.data)
+        topic = request.data.get('topic')
+        
+        if not topic:
+            return Response(
+                {'error': 'Topic is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # content = generate_blog_by_topic(topic)
+            time.sleep(2)
+            content = f"api:{topic}"
+            print(content)
+
+            
+            return JsonResponse({
+                'status': 'success',
+                'topic': topic,
+                'content': content,
+                'timestamp': timezone.now().isoformat()
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'error': 'Invalid JSON data',
+                'status': 'failed'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'error': str(e),
+                'status': 'failed'
+            }, status=500)
+    
+
     @action(detail=True, methods=['post'])
     def publish(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
@@ -185,6 +267,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
     @action(detail=True, methods=['post'])
     def generate_content_by_promt(self, request, slug=None, admin_uuid=None):
         blog = self.get_object()
