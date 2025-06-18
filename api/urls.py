@@ -21,18 +21,7 @@ urlpatterns = [
     # Admin authentication endpoints
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    
-    # Admin registration endpoint
-    path('register/', AdminViewSet.as_view({'post': 'register'}), name='admin-register'),
-
-
-    path('admin/profile/', AdminViewSet.as_view({'patch': 'profile'}), name='admin-profile'),
-
-    path('<uuid:admin_uuid>/admin/', include(admin_router.urls)),
-    
-    # Public routes also by work_domain
-    path('<slug:work_domain>/', include(public_router.urls)),
-    
-    # Additional custom endpoints
-    # path('sections/by_blog/', SectionViewSet.as_view({'get': 'by_blog'}), name='sections-by-blog'),
+    path('register/', AdminViewSet.as_view({'post': 'register'}), name='admin-register'), # Admin registration endpoint
+    path('admin/', include(admin_router.urls)),
+    path('<slug:work_domain>/', include(public_router.urls)), # Public routes also by work_domain
 ]  

@@ -94,7 +94,7 @@ class Blog_List_Serializer(serializers.ModelSerializer):
     def get_content(self, obj):
         # Return first 17 characters of content
         if obj.content:
-            return obj.content[:17]
+            return obj.content[:100]
         else:
             return ''
 

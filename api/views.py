@@ -46,12 +46,6 @@ class AdminViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid') 
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
-        if admin.user != self.request.user: 
-            raise PermissionDenied("You are not authorized to access this admin profile.")
-
-        
         return Admin.objects.filter(user=self.request.user)
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
@@ -65,8 +59,8 @@ class AdminViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['patch'])
-    def profile(self, request):
+    @action(detail=False, methods=['patch']) 
+    def updates(self, request):
         """
         PATCH /api/admins/profile/
         Updates the admin's profile and user fields.
@@ -101,24 +95,19 @@ class BlogViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
 
     def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid') 
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
-        
-        # Ensure the authenticated user is the admin
-        if admin.user != self.request.user:
+        try:
+            # admin = Admin.objects.get(user=self.request.user)
+            admin = get_object_or_404(Admin ,user=self.request.user)
+            return Blog.objects.filter(admin=admin)
+        except Admin.DoesNotExist:
             return Blog.objects.none()
-            
-        return Blog.objects.filter(admin=admin)
     
     def get_object(self):
-        admin_uuid = self.kwargs.get('admin_uuid')
         slug = self.kwargs.get('slug')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
-
-        if admin.user != self.request.user:
-            raise PermissionDenied("You are not authorized to access this admin profile.")
-
+        # admin = Admin.objects.get(user=self.request.user)
+        admin = get_object_or_404(Admin ,user=self.request.user)
         blog = get_object_or_404(Blog, slug=slug, admin=admin)
+
         return blog
     
     def list(self, request, *args, **kwargs):
@@ -127,17 +116,12 @@ class BlogViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        admin_uuid = self.kwargs.get('admin_uuid')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
-        
-        # Ensure the authenticated user is the admin
-        if admin.user != self.request.user: 
-            raise PermissionDenied("You are not authorized to access this admin profile.")
-            
+        admin = get_object_or_404(Admin ,user=self.request.user)
+        # admin = Admin.objects.get(user=self.request.user)
         serializer.save(admin=admin)
 
     @action(detail=False, methods=['post'])
-    def generate_topic(self, request, admin_uuid=None):
+    def generate_topic(self, request):
         try:
             prompt = request.data.get('prompt')
             
@@ -148,9 +132,9 @@ class BlogViewSet(viewsets.ModelViewSet):
                 }, status=400)
             
             # Get the admin
-            admin = get_object_or_404(Admin, uuid=admin_uuid)
-            if admin.user != self.request.user:
-                raise PermissionDenied("You are not authorized to access this admin profile.")
+            # admin = get_object_or_404(Admin ,user=self.request.user)
+            # if admin.user != self.request.user:
+            #     raise PermissionDenied("You are not authorized to access this admin profile.")
             
             # try:
             #     image_generator = Image_generator()
@@ -166,7 +150,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             # Simulate topic generation (replace with your actual logic)
             # topic = generate_topic(prompt)
             time.sleep(4)
-            topic = f"{prompt}. This is a simulated response."
+            topic = f"{prompt}. This is a simulated"
             
             # Create a blog with the generated topic
             blog_data = {
@@ -243,10 +227,8 @@ class BlogViewSet(viewsets.ModelViewSet):
     
 
     @action(detail=True, methods=['post'])
-    def publish(self, request, slug=None, admin_uuid=None):
+    def publish(self, request, slug=None):
         blog = self.get_object()
-        if blog.admin.user != request.user:
-            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
         blog.status = 'published'
         blog.published_at = timezone.now()
@@ -254,10 +236,8 @@ class BlogViewSet(viewsets.ModelViewSet):
         return Response(BlogSerializer(blog).data)
 
     @action(detail=True, methods=['post'])
-    def unpublish(self, request, slug=None, admin_uuid=None):
+    def unpublish(self, request, slug=None):
         blog = self.get_object()
-        if blog.admin.user != request.user:
-            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
         blog.status = 'draft'
         blog.published_at = None
@@ -266,11 +246,11 @@ class BlogViewSet(viewsets.ModelViewSet):
     
 
     @action(detail=True, methods=['post'])
-    def generate_content(self, request, slug=None, admin_uuid=None):
+    def generate_content(self, request, slug=None):
         blog = self.get_object()
 
-        if blog.admin.user != request.user:
-            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+        # if blog.admin.user != request.user:
+        #     return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
         topic = request.data.get('topic')
         
@@ -284,6 +264,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             
             # content = generate_blog_by_topic(topic)
             content = "this is a content test"
+            time.sleep(4)
             print(content)
             blog.title = topic
             # blog.slug = slugify(topic)
@@ -299,7 +280,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             )
     
     @action(detail=True, methods=['post'])
-    def generate_content_by_promt(self, request, slug=None, admin_uuid=None):
+    def generate_content_by_promt(self, request, slug=None):
         blog = self.get_object()
         promt = request.data.get('promt')
         topic = request.data.get('topic')
@@ -326,7 +307,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         
 
     @action(detail=True, methods=['post'])
-    def regenerate_content(self, request, slug=None, admin_uuid=None):
+    def regenerate_content(self, request, slug=None):
         blog = self.get_object()
         feedback = request.data.get('feedback')
         
