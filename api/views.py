@@ -124,6 +124,7 @@ class BlogViewSet(viewsets.ModelViewSet):
     def generate_topic(self, request):
         try:
             prompt = request.data.get('prompt')
+            temp_doc_ids = request.data.getlist('documents')  # list of UUIDs to attach
             
             if not prompt:
                 return JsonResponse({
@@ -163,6 +164,24 @@ class BlogViewSet(viewsets.ModelViewSet):
             if serializer.is_valid():
                 blog = serializer.save()
                 
+                # 1️⃣ Attach documents specified in request
+                attached_count = 0
+                for doc_id in temp_doc_ids:
+                    try:
+                        doc = Document.objects.get(uuid=doc_id, is_temporary=True)
+                        doc.mark_as_attached(blog)
+                        attached_count += 1
+                    except Document.DoesNotExist:
+                        continue
+
+                # 2️⃣ Delete all other temporary documents of this admin that were not selected
+                other_docs = Document.objects.filter(
+                    is_temporary=True,
+                    blog__isnull=True,
+                    blog__admin=admin
+                ).exclude(uuid__in=temp_doc_ids)
+                deleted_count, _ = other_docs.delete()
+
                 return JsonResponse({
                     'status': 'success',
                     'prompt': prompt,
@@ -331,6 +350,54 @@ class BlogViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['post'])
+    def upload_temp_documents(self, request):
+        """
+        Upload multiple files (images, PDF, Word), extract text, create temporary Documents.
+        """
+        files = request.FILES.getlist('files')  # note: getlist for multiple files
+        if not files:
+            return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        created_docs = []
+
+        for file in files:
+            extracted_text = ""
+
+            # Check file type
+            if file.content_type.startswith("image/"):
+                # Image: OCR
+                image = Image.open(file)
+                extracted_text = pytesseract.image_to_string(image, lang='fas+eng')
+
+            elif file.content_type in [
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ]:
+                # PDF or Word: extract text via textract
+                file_bytes = BytesIO(file.read())
+                extracted_text = textract.process(file_bytes).decode('utf-8', errors='ignore')
+
+            else:
+                continue  # skip unsupported files
+
+            # Create temporary document
+            doc = Document.objects.create(content_text=extracted_text, is_temporary=True)
+            created_docs.append({
+                'document_id': str(doc.uuid),
+                'file_name': file.name,
+                'text_preview': extracted_text[:200]
+            })
+
+        if not created_docs:
+            return Response({'error': 'No valid files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'status': 'success',
+            'created_documents': created_docs
+        }, status=status.HTTP_201_CREATED)
 
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer

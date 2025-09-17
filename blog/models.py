@@ -60,7 +60,26 @@ class Blog(models.Model):
         return self.title
 
 
-    
+class DocumentContent(models.Model):
+    TYPE_CHOICES = [('PDF','PDF'), ('IMG','Image')]
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, null=True, blank=True, related_name='documents')  
+    title = models.CharField(max_length=255)
+    type = models.CharField(max_length=3, choices=TYPE_CHOICES)
+    text_content = models.TextField()
+    is_temporary = models.BooleanField(default=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def mark_as_attached(self, blog):
+        """وقتی بلاگ ساخته شد این متد را صدا بزنید"""
+        self.blog = blog
+        self.is_temporary = False
+        self.save()
+
+    def __str__(self):
+        return f"{self.title} ({self.blog.title})"
+
 class Comment(models.Model):
     # section = models.ForeignKey(Section, related_name='comments', on_delete=models.CASCADE)
     blog = models.ForeignKey(Blog, related_name='sections', on_delete=models.CASCADE, null = True , blank = True)

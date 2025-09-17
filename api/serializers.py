@@ -1,6 +1,6 @@
 from rest_framework import serializers
 # from django.contrib.auth.models import User
-from blog.models import Blog, Comment, Admin, CustomUser
+from blog.models import Blog, Comment, Admin, CustomUser ,DocumentContent
 from django.utils.text import slugify
 # from .models import Admin
 
@@ -103,6 +103,11 @@ class BlogCreateSerializer(serializers.ModelSerializer):
         model = Blog
         fields = ('title',)
 
+
+class DocumentContentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentContent
+        fields = '__all__'
 # class SectionCreateSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = Section
