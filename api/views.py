@@ -130,7 +130,7 @@ class BlogViewSet(viewsets.ModelViewSet):
     def generate_topic(self, request):
         try:
             prompt = request.data.get('prompt')
-            temp_doc_ids = request.data.getlist('documents')  # list of UUIDs to attach
+            temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
             
             if not prompt:
                 return JsonResponse({
@@ -138,6 +138,14 @@ class BlogViewSet(viewsets.ModelViewSet):
                     'status': 'failed'
                 }, status=400)
             
+            # Delete all other temporary documents of this admin that were not selected
+            other_docs = DocumentContent.objects.filter(
+                is_temporary=True,
+                blog__isnull=True,
+                user=request.user
+            ).exclude(uuid__in=temp_doc_ids)
+            deleted_count, _ = other_docs.delete()
+
             # Get the admin
             # admin = get_object_or_404(Admin ,user=self.request.user)
             # if admin.user != self.request.user:
@@ -153,12 +161,27 @@ class BlogViewSet(viewsets.ModelViewSet):
             #     # image_generator.download(image_info, 'lake.png')
             # except:
             #     image_url = ""
+
             image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+            documents = []
+            for doc_id in temp_doc_ids:
+                try:
+                    doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
+                    documents.append({
+                        'title': doc.title,
+                        'text': doc.text_content
+                    })
+                except DocumentContent.DoesNotExist:
+                    continue
+            print(documents)
+            # topic = generate_topic(prompt , documents)
+
             # Simulate topic generation (replace with your actual logic)
-            # topic = generate_topic(prompt)
             time.sleep(4)
             topic = f"{prompt}. This is a simulated"
             
+            
+
             # Create a blog with the generated topic
             blog_data = {
                 'title': topic,  # Using response as title
@@ -174,25 +197,19 @@ class BlogViewSet(viewsets.ModelViewSet):
                 attached_count = 0
                 for doc_id in temp_doc_ids:
                     try:
-                        doc = Document.objects.get(uuid=doc_id, is_temporary=True)
+                        doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
                         doc.mark_as_attached(blog)
                         attached_count += 1
-                    except Document.DoesNotExist:
+                    except DocumentContent.DoesNotExist:
                         continue
-
-                # 2️⃣ Delete all other temporary documents of this admin that were not selected
-                other_docs = Document.objects.filter(
-                    is_temporary=True,
-                    blog__isnull=True,
-                    blog__admin=admin
-                ).exclude(uuid__in=temp_doc_ids)
-                deleted_count, _ = other_docs.delete()
 
                 return JsonResponse({
                     'status': 'success',
                     'prompt': prompt,
                     'response': topic,
                     'blog_slug': blog.slug,
+                    'attached_documents': attached_count,
+                    'deleted_other_temp_documents': deleted_count,
                     'timestamp': timezone.now().isoformat()
                 })
             else:
