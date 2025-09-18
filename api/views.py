@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view ,  permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from blog.models import Blog, Comment,Admin,CustomUser
+from blog.models import Blog, Comment,Admin,CustomUser, DocumentContent
 from .serializers import (
     BlogSerializer, BlogCreateSerializer,
     CommentSerializer,
@@ -24,7 +24,7 @@ import openai
 from django.conf import settings
 import cohere
 from django.utils import timezone
-from .serializers import AdminSerializer, UserSerializer
+from .serializers import AdminSerializer, UserSerializer, DocumentContentSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -32,6 +32,12 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import JsonResponse
 import json
 import time
+
+from PIL import Image  # for opening image files
+import pytesseract     # for OCR text extraction
+import pdfplumber
+from docx import Document as DocxDocument
+from io import BytesIO
 
 class AdminViewSet(viewsets.ModelViewSet):
     queryset = Admin.objects.all()
@@ -361,7 +367,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
 
         created_docs = []
-
+        print(files)
         for file in files:
             extracted_text = ""
 
@@ -370,25 +376,42 @@ class BlogViewSet(viewsets.ModelViewSet):
                 # Image: OCR
                 image = Image.open(file)
                 extracted_text = pytesseract.image_to_string(image, lang='fas+eng')
-
-            elif file.content_type in [
-                "application/pdf",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ]:
-                # PDF or Word: extract text via textract
-                file_bytes = BytesIO(file.read())
-                extracted_text = textract.process(file_bytes).decode('utf-8', errors='ignore')
+                doc_type = 'IMG'
+            elif file.content_type == "application/pdf":
+                text = ""
+                with pdfplumber.open(file) as pdf:
+                    for page in pdf.pages:
+                        text += page.extract_text() + "\n"
+                doc_type = 'PDF'
+            elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                docx = DocxDocument(file)
+                text = "\n".join([p.text for p in docx.paragraphs])
+                doc_type = 'DOCX'
+            # elif file.content_type in [
+            #     "application/pdf",
+            #     "application/msword",
+            #     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            # ]:
+            #     # PDF or Word: extract text via textract
+            #     file_bytes = BytesIO(file.read())
+            #     extracted_text = textract.process(file_bytes).decode('utf-8', errors='ignore')
 
             else:
                 continue  # skip unsupported files
 
-            # Create temporary document
-            doc = Document.objects.create(content_text=extracted_text, is_temporary=True)
+            # 2. Create the DocumentContent object with all required fields
+            doc = DocumentContent.objects.create(
+                user=request.user,          # <– required ForeignKey
+                title=file.name,            # <– required CharField
+                type=doc_type,              # <– required ChoiceField
+                text_content=extracted_text,
+                is_temporary=True
+            )
+             # 3. Add to return list
             created_docs.append({
                 'document_id': str(doc.uuid),
-                'file_name': file.name,
-                'text_preview': extracted_text[:200]
+                'title': doc.title,
+                'text_preview': doc.text_content[:200]
             })
 
         if not created_docs:
