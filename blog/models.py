@@ -70,7 +70,7 @@ class DocumentContent(models.Model):
     text_content = models.TextField()
     is_temporary = models.BooleanField(default=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    chunks_data = models.JSONField(null=True, blank=True)
     def mark_as_attached(self, blog):
         """وقتی بلاگ ساخته شد این متد را صدا بزنید"""
         self.blog = blog

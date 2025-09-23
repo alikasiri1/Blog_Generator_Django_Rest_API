@@ -108,10 +108,6 @@ class DocumentContentSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentContent
         fields = '__all__'
-# class SectionCreateSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Section
-#         fields = ('title', 'content', 'order', 'section_type')
 
 class CommentCreateSerializer(serializers.ModelSerializer):
     class Meta:
