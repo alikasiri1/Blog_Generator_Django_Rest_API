@@ -41,41 +41,9 @@ import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
 from io import BytesIO
-from sklearn.metrics.pairwise import cosine_similarity
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
-import numpy as np
 
-def get_top_k_chunks(query_text, all_chunks, all_embs, embedding_model, k=5):
-    """
-    Retrieve top-k most relevant chunks to the query.
-
-    Args:
-        query_text (str): The user's query or prompt.
-        chunks_data (list of dict): Each dict contains 'text' and 'embedding'.
-        embedding_model: A sentence-transformer model to encode the query.
-        k (int): Number of top chunks to return.
-
-    Returns:
-        List of top-k chunk texts, ordered by relevance.
-    """
-    # Extract texts and embeddings
-    # all_chunks = [c['text'] for c in chunks_data]
-    # all_embs = [c['embedding'] for c in chunks_data]
-
-    # Embed the query
-    query_emb = embedding_model.encode(query_text).reshape(1, -1)
-    embs_array = np.array(all_embs)
-
-    # Compute cosine similarity
-    sims = cosine_similarity(query_emb, embs_array)[0]
-
-    # Get indices of top-k most similar chunks
-    top_idx = np.argsort(sims)[::-1][:k]
-
-    # Return the top-k chunk texts
-    top_chunks = [all_chunks[i] for i in top_idx]
-    return top_chunks
+ 
+from services.embeddings import get_top_k_chunks, embedding_model, splitter
 
 class AdminViewSet(viewsets.ModelViewSet):
     queryset = Admin.objects.all()
@@ -137,7 +105,7 @@ class BlogViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = 'slug'
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
 
     def get_queryset(self):
         try:
@@ -349,6 +317,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Topic is required'}, status=status.HTTP_400_BAD_REQUEST)
 
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
+            print(docs)
             if docs:
                 all_chunks = []
                 all_embs = []
@@ -356,7 +325,7 @@ class BlogViewSet(viewsets.ModelViewSet):
 
                 for doc in docs:
                     for chunk in doc.chunks_data:   # your JSON list of dicts
-                        chunk_dic['test'] = chunk['text']
+                        chunk_dic['text'] = chunk['text']
                         chunk_dic['doc_title'] = doc.title
                         all_chunks.append(chunk_dic)
                         all_embs.append(chunk['embedding'])
@@ -368,6 +337,8 @@ class BlogViewSet(viewsets.ModelViewSet):
                 embedding_model=embedding_model,
                 k=5
             )
+                print(top_chunks)
+                print("--------------------------------")
             else:
                 pass
 
@@ -402,8 +373,35 @@ class BlogViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            
-            content = generate_blog_by_promt(promt , topic)
+            docs = DocumentContent.objects.filter(blog=blog, user=request.user)
+            print(docs)
+            if docs:
+                all_chunks = []
+                all_embs = []
+                
+
+                for doc in docs:
+                    for chunk in doc.chunks_data:   # your JSON list of dicts
+                        chunk_dic = {}
+                        chunk_dic['text'] = chunk['text']
+                        chunk_dic['doc_title'] = doc.title
+                        all_chunks.append(chunk_dic)
+                        all_embs.append(chunk['embedding'])
+
+                top_chunks = get_top_k_chunks(
+                query_text=topic,
+                all_chunks=all_chunks,  # from your JSONField
+                all_embs = all_embs,
+                embedding_model=embedding_model,
+                k=1
+            )
+                print(top_chunks)
+                print("--------------------------------")
+            else:
+                pass
+
+            # content = generate_blog_by_promt(promt , topic, top_chunks)
+            content = "this is a content test"
             print(content)
             blog.content = ''.join(content.split('\n\n'))
             blog.save()
@@ -430,7 +428,8 @@ class BlogViewSet(viewsets.ModelViewSet):
 
         try:
             
-            content = regenerate_blog_by_feedback(blog.content , feedback)
+            # content = regenerate_blog_by_feedback(blog.content , feedback)
+            content = "this is a content test"
             print(content)
             blog.content = ''.join(content.split('\n\n'))
             blog.save()
@@ -452,6 +451,8 @@ class BlogViewSet(viewsets.ModelViewSet):
         if not files:
             return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # slug = request.data.get('slug')
+        # blog = get_object_or_404(Blog, slug=slug, user=request.user)
         created_docs = []
         print(files)
         for file in files:
@@ -483,7 +484,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             #     extracted_text = textract.process(file_bytes).decode('utf-8', errors='ignore')
 
             else:
-                continue  # skip unsupported files
+                return Response({'error': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
+                # continue  # skip unsupported files
             
 
             chunks = splitter.split_text(extracted_text)
@@ -502,6 +504,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 title=file.name,            # <– required CharField
                 type=doc_type,              # <– required ChoiceField
                 text_content=extracted_text,
+                chunks_data=chunks_data,
                 is_temporary=True
             )
              # 3. Add to return list

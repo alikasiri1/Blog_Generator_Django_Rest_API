@@ -72,7 +72,7 @@ class DocumentContent(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     chunks_data = models.JSONField(null=True, blank=True)
     def mark_as_attached(self, blog):
-        """وقتی بلاگ ساخته شد این متد را صدا بزنید"""
+        """ when blog is created, this method is called """
         self.blog = blog
         self.is_temporary = False
         self.save()
