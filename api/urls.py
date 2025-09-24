@@ -2,9 +2,10 @@ from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from .views import (
-    BlogViewSet, AdminViewSet, CommentViewSet, 
-    PublicBlogViewSet, CustomTokenObtainPairView
+    AdminViewSet, CommentViewSet, 
+    CustomTokenObtainPairView
 )
+from blog.views import BlogViewSet, PublicBlogViewSet
 
 # Admin router for authenticated admin operations
 admin_router = DefaultRouter() 
