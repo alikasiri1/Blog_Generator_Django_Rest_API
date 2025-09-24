@@ -1,49 +1,18 @@
-from django.shortcuts import render
-from django.utils.text import slugify
-
 # Create your views here.
-from rest_framework import viewsets, status, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework import viewsets, status
+
 from rest_framework.decorators import action
-from rest_framework.decorators import api_view ,  permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from blog.models import Blog, Comment,Admin,CustomUser, DocumentContent
+from blog.models import  Comment,Admin,CustomUser
 
+from .serializers import CommentSerializer
 
-from .serializers import (
-    BlogSerializer, BlogCreateSerializer,
-    CommentSerializer,
-    Blog_List_Serializer 
-)
-from services.generator import ( 
-    generate_blog_by_promt,
-    generate_blog_by_topic,
-    regenerate_blog_by_feedback,
-    generate_topic
-)
-from services.image_generator import Image_generator
-import openai
-from django.conf import settings
-import cohere
-from django.utils import timezone
-from .serializers import AdminSerializer, UserSerializer, DocumentContentSerializer
+from .serializers import AdminSerializer, UserSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.http import JsonResponse
-import json
-import time
-
-from PIL import Image  # for opening image files
-import pytesseract     # for OCR text extraction
-import pdfplumber
-from docx import Document as DocxDocument
-from io import BytesIO
-
- 
-from services.embeddings import get_top_k_chunks, embedding_model, splitter
 
 class AdminViewSet(viewsets.ModelViewSet):
     queryset = Admin.objects.all()
@@ -80,7 +49,7 @@ class AdminViewSet(viewsets.ModelViewSet):
         admin = Admin.objects.get(user=request.user) 
         print(admin)
         serializer = self.get_serializer(admin, data=request.data, partial=True)
-        
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

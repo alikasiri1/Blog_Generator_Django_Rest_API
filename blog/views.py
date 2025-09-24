@@ -1,18 +1,17 @@
 # Create your views here.
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Blog, Comment,Admin,CustomUser, DocumentContent
+from .models import Blog, Comment,Admin, DocumentContent
+from django.utils.text import slugify
 
 from api.serializers import (
-    BlogSerializer, BlogCreateSerializer,
-    CommentSerializer,
+    BlogSerializer,
     Blog_List_Serializer 
 )
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.contrib.auth.models import User
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import JsonResponse
 import json
@@ -22,7 +21,8 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-from services.embeddings import get_top_k_chunks, embedding_model, splitter, generate_blog_by_promt
+from services.embeddings import get_top_k_chunks, embedding_model, splitter
+from services.generator import generate_blog_by_promt
 from services.image_generator import Image_generator
 # Create your views here.
 
@@ -291,7 +291,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             time.sleep(4)
             print(content)
             blog.title = topic
-            # blog.slug = slugify(topic)
+            blog.slug = slugify(topic)
             blog.content = ''.join(content.split('\n\n'))
             blog.save()
             
