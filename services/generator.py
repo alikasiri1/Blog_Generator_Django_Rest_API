@@ -23,7 +23,7 @@ def generate_blog_by_topic(topic: str , max_tokens=2000 , temperature=0.7):
     
     content = response.generations[0].text
 
-def generate_topic(prompt: str, temperature=0.7, max_tokens=300):
+def generate_topic(prompt: str, temperature=0.7, max_tokens=300, top_chunks:list = []):
     """
     Generate a blog topic based on the given prompt using Cohere's API.
     
@@ -37,68 +37,100 @@ def generate_topic(prompt: str, temperature=0.7, max_tokens=300):
     """
     # Initialize Cohere client
     co = cohere.Client(settings.COHERE_API_KEY)
-    
-    # Generate blog topic using Cohere
-    response = co.generate(
-        model='command',
-        prompt=f"""You are a professional content creator. Generate an engaging and creative blog topic based on the following prompt:
-        
-        User Prompt: "{prompt}"
-        
-        Requirements:
-        - The topic should be specific and interesting
-        - It should appeal to a general audience
-        - Keep it concise (under 10 words)
-        - Make it attention-grabbing
-        
-        Return only the topic itself, no additional text.""",
-        max_tokens=max_tokens,
-        temperature=temperature,
-        stop_sequences=["\n"]
-    )
-    
-    # Extract and clean the generated topic
-    topic = response.generations[0].text.strip()
-    topic = topic.replace('"', '')  # Remove any quotation marks
-    return topic
+    try:
+        if len(top_chunks) > 0:
+            # Generate blog topic using Cohere
+            response = co.generate(
+            model='command',
+            prompt=f"""You are a professional content creator. Generate an engaging and creative blog topic based on the following prompt and documents:
+            
+            User Prompt: "{prompt}"
+            User documents: ```{top_chunks}```
+            
+            Requirements:
+            - The topic should be specific and interesting
+            - It should appeal to a general audience
+            - Keep it concise (under 12 words)
+            - Make it attention-grabbing
+            
+            Return only the topic itself, no additional text.""",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop_sequences=["\n"]
+        )
 
-def generate_blog_by_promt(promt , max_tokens=2000 , temperature=0.7 , topic=None):
+        else:
+            response = co.generate(
+            model='command',
+            prompt=f"""You are a professional content creator. Generate an engaging and creative blog topic based on the following prompt:
+            
+            User Prompt: "{prompt}"
+            
+            Requirements:
+            - The topic should be specific and interesting
+            - It should appeal to a general audience
+            - Keep it concise (under 12 words)
+            - Make it attention-grabbing
+            
+            Return only the topic itself, no additional text.""",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop_sequences=["\n"]
+        )
+        # Extract and clean the generated topic
+        topic = response.generations[0].text.strip()
+        topic = topic.replace('"', '')  # Remove any quotation marks
+        return topic
+    except:
+        return None
+    
+    
+
+def generate_blog_by_promt(promt , max_tokens=2000 , temperature=0.7 , topic=None , top_chunks:list = []):
     # Initialize Cohere client
     co = cohere.Client(settings.COHERE_API_KEY)
+    try:
+        if len(top_chunks) > 0:
+            # Generate blog content using Cohere
+            response = co.generate(
+                model='command',
+                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {topic} based on this promt {promt}. 
+                Use the following chunks from the documents to help you generate the blog post:
+                ```
+                {top_chunks}
+                ```
+                
+                Include the following sections:
+                1. Introduction
+                2. Several main sections with detailed content
+                3. Conclusion
+                
+                Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
 
-    if topic:
-        # Generate blog content using Cohere
-        response = co.generate(
-            model='command',
-            prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {topic} based on this promt {promt}.
-            
-            Include the following sections:
-            1. Introduction
-            2. Several main sections with detailed content
-            3. Conclusion
-            
-            Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
-        
-    else :
-        # Generate blog content using Cohere
-        response = co.generate(
-            model='command',
-            prompt=f"""You are a professional blog writer. Generate a well-structured blog post about based on this promt{promt}.
-            
-            Include the following sections:
-            1. topic
-            2. Introduction
-            3. Several main sections with detailed content
-            4. Conclusion
-            
-            Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
-    content = response.generations[0].text
+        else :
+            # Generate blog content using Cohere
+            response = co.generate(
+                model='command',
+                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {topic} based on this promt {promt}.
+                
+                Include the following sections:
+                1. topic
+                2. Introduction
+                3. Several main sections with detailed content
+                4. Conclusion
+                
+                Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+
+        content = response.generations[0].text
+        return content
+    except:
+        return None
 
 def regenerate_blog_by_feedback(blog_content , feedback):
     # Initialize Cohere client

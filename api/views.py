@@ -397,8 +397,9 @@ class BlogViewSet(viewsets.ModelViewSet):
             )
                 print(top_chunks)
                 print("--------------------------------")
+                content = generate_blog_by_promt(promt , topic, top_chunks)
             else:
-                pass
+                content = generate_blog_by_promt(promt , topic, [])
 
             # content = generate_blog_by_promt(promt , topic, top_chunks)
             content = "this is a content test"
