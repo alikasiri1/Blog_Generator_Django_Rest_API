@@ -21,8 +21,8 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-from services.embeddings import get_top_k_chunks, embedding_model, splitter
-from services.generator import generate_blog_by_promt
+# from services.embeddings import get_top_k_chunks, embedding_model, splitter
+from services.generator import generate_blog_by_prompt
 from services.image_generator import Image_generator
 # Create your views here.
 
@@ -80,13 +80,28 @@ class BlogViewSet(viewsets.ModelViewSet):
         try:
             prompt = request.data.get('prompt')
             temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
-            
+            num_cards = int(request.data.get('num_cards'))
+
+            if num_cards:
+                if num_cards > 10 or num_cards < 1:
+                    return JsonResponse({
+                    'error': 'num_cards should be less than 10 and greater than 1',
+                    'status': 'failed'
+                }, status=400)
+            else:
+                return JsonResponse({
+                    'error': 'num_cards is required',
+                    'status': 'failed'
+                }, status=400)
+
             if not prompt:
                 return JsonResponse({
                     'error': 'Prompt is required',
                     'status': 'failed'
                 }, status=400)
             
+
+
             # Delete all other temporary documents of this admin that were not selected
             other_docs = DocumentContent.objects.filter(
                 is_temporary=True,
@@ -123,18 +138,20 @@ class BlogViewSet(viewsets.ModelViewSet):
                 except DocumentContent.DoesNotExist:
                     continue
             print(documents)
-            # topic = generate_topic(prompt , documents)
+            # topics = generate_topic(prompt , documents, num_cards)
 
             # Simulate topic generation (replace with your actual logic)
-            time.sleep(4)
-            topic = f"{prompt}. This is a simulated"
+            time.sleep(1)
+            topics = [f"{prompt}. This is a simulated","body",'conclusion']
             
-            
-
+            content = []
+            for topic in topics[1:]:
+                content.append({'heading': topic, 'body': ""})
             # Create a blog with the generated topic
             blog_data = {
-                'title': topic,  # Using response as title
+                'title': topics[0],  # Using response as title
                 'image_url': image_url,
+                'content': content,
             }
             
             # Use your serializer to create the blog
@@ -155,7 +172,8 @@ class BlogViewSet(viewsets.ModelViewSet):
                 return JsonResponse({
                     'status': 'success',
                     'prompt': prompt,
-                    'response': topic,
+                    'title': topics[0],
+                    'topics': topics[1:],
                     'blog_slug': blog.slug,
                     'attached_documents': attached_count,
                     'deleted_other_temp_documents': deleted_count,
@@ -238,29 +256,38 @@ class BlogViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def generate_content(self, request, slug=None):
-        blog = self.get_object()
-
-        # if blog.admin.user != request.user:
-        #     return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-        
-        topic = request.data.get('topic')
-
-        if not topic:
-            return Response(
-                {'error': 'Topic is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
+            blog = self.get_object()
+            title = request.data.get('title')
+            topics = request.data.get('topics')
+
+            if topics:
+                if len(topics) > 10 or len(topics) < 1:
+                    return JsonResponse({
+                    'error': 'topics should be less than 10 and greater than 1',
+                    'status': 'failed'
+                }, status=400)
+            else:
+                return JsonResponse({
+                    'error': 'topics is required',
+                    'status': 'failed'
+                }, status=400)
+
+            if not title:
+                return Response(
+                    {'error': 'title is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+
 
             # k = int(request.data.get('top_k', 5))
 
-            if not topic:
-                return Response({'error': 'Topic is required'}, status=status.HTTP_400_BAD_REQUEST)
 
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
             print(docs)
             if docs:
+                print("docs are there")
                 all_chunks = []
                 all_embs = []
                 chunk_dic = {}
@@ -273,7 +300,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                         all_embs.append(chunk['embedding'])
                 
                 top_chunks = get_top_k_chunks(
-                query_text=topic,
+                query_text=title,
                 all_chunks=all_chunks,  # from your JSONField
                 all_embs = all_embs,
                 embedding_model=embedding_model,
@@ -287,16 +314,19 @@ class BlogViewSet(viewsets.ModelViewSet):
             
             
             # content = generate_blog_by_topic(topic)
-            content = "this is a content test"
-            time.sleep(4)
+            content = [
+                {"heading": "Intro", "body": "This is the intro."},
+                {"heading": "Details", "body": "Some details here."}
+            ]
+            time.sleep(1)
             print(content)
-            blog.title = topic
-            blog.slug = slugify(topic)
-            blog.content = ''.join(content.split('\n\n'))
+            blog.title = title
+            blog.slug = slugify(title)
+            blog.content = content
             blog.save()
             
             return Response(BlogSerializer(blog).data)
-        
+            
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -305,16 +335,29 @@ class BlogViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def generate_content_by_promt(self, request, slug=None):
-        blog = self.get_object()
-        promt = request.data.get('promt')
-        topic = request.data.get('topic')
-        if not promt:
-            return Response(
-                {'error': 'promt is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
+            blog = self.get_object()
+            prompt = request.data.get('prompt')
+            title = request.data.get('title')
+            topics = request.data.get('topics')
+
+            if topics:
+                if len(topics) > 10 or len(topics) < 1:
+                    return JsonResponse({
+                    'error': 'topics should be less than 10 and greater than 1',
+                    'status': 'failed'
+                }, status=400)
+            else:
+                return JsonResponse({
+                    'error': 'topics is required',
+                    'status': 'failed'
+                }, status=400)
+            if not prompt:
+                return Response(
+                    {'error': 'prompt is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
             print(docs)
             if docs:
@@ -331,26 +374,31 @@ class BlogViewSet(viewsets.ModelViewSet):
                         all_embs.append(chunk['embedding'])
 
                 top_chunks = get_top_k_chunks(
-                query_text=topic,
+                query_text=title,
                 all_chunks=all_chunks,  # from your JSONField
                 all_embs = all_embs,
                 embedding_model=embedding_model,
                 k=1
-            )
+                )
                 print(top_chunks)
                 print("--------------------------------")
-                content = generate_blog_by_promt(promt , topic, top_chunks)
+                content = generate_blog_by_prompt(prompt ,topics ,title , top_chunks)
             else:
-                content = generate_blog_by_promt(promt , topic, [])
+                content = generate_blog_by_prompt(prompt , topics ,title, [])
 
-            # content = generate_blog_by_promt(promt , topic, top_chunks)
-            content = "this is a content test"
+            # content = generate_blog_by_promt(promt , topics ,title, top_chunks)
+            content = [
+                {"heading": "Intro", "body": "This is the intro."},
+                {"heading": "Details", "body": "Some details here."}
+            ]
             print(content)
-            blog.content = ''.join(content.split('\n\n'))
+            blog.content = content
+            blog.title = title
+            blog.slug = slugify(title)
             blog.save()
             
             return Response(BlogSerializer(blog).data)
-        
+            
         except Exception as e:
             return Response(
                 {'error': str(e)},

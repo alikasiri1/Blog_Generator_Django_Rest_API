@@ -86,24 +86,26 @@ def generate_topic(prompt: str, temperature=0.7, max_tokens=300, top_chunks:list
     
     
 
-def generate_blog_by_promt(promt , max_tokens=2000 , temperature=0.7 , topic=None , top_chunks:list = []):
+def generate_blog_by_prompt(prompt , max_tokens=2000 , temperature=0.7  ,topics = None, title = None, top_chunks:list = []):
     # Initialize Cohere client
     co = cohere.Client(settings.COHERE_API_KEY)
     try:
         if len(top_chunks) > 0:
+            topics_prompt = ""
+            for i in range(len(topics)):
+                topics_prompt += f"{i}. {topics[i]}\n"
+                print(topics_prompt)
             # Generate blog content using Cohere
             response = co.generate(
                 model='command',
-                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {topic} based on this promt {promt}. 
+                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {title} based on this prompt {prompt}.  
                 Use the following chunks from the documents to help you generate the blog post:
                 ```
                 {top_chunks}
                 ```
                 
                 Include the following sections:
-                1. Introduction
-                2. Several main sections with detailed content
-                3. Conclusion
+                {topics_prompt}
                 
                 Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
                 max_tokens=max_tokens,
@@ -114,13 +116,10 @@ def generate_blog_by_promt(promt , max_tokens=2000 , temperature=0.7 , topic=Non
             # Generate blog content using Cohere
             response = co.generate(
                 model='command',
-                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {topic} based on this promt {promt}.
+                prompt=f"""You are a professional blog writer. Generate a well-structured blog post about {title} based on this prompt {prompt}.
                 
                 Include the following sections:
-                1. topic
-                2. Introduction
-                3. Several main sections with detailed content
-                4. Conclusion
+                {topics_prompt}
                 
                 Make sure the blog post is comprehensive and well-formatted with clear section breaks.""",
                 max_tokens=max_tokens,

@@ -29,7 +29,8 @@ class Blog(models.Model):
 
     admin = models.ForeignKey(Admin, on_delete=models.CASCADE, related_name='blogs', null = True , blank = True)
     title = models.CharField(max_length=200)
-    content = models.TextField(null = True , blank = True)
+    # content = models.TextField(null = True , blank = True)
+    content = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
     slug = models.SlugField(max_length=200, null = True , blank = True)
     image_url = models.URLField(max_length=500, null=True, blank=True) 
     image = models.ImageField(upload_to='blog_images/', null=True, blank=True)  
@@ -78,7 +79,7 @@ class DocumentContent(models.Model):
         self.save()
 
     def __str__(self):
-        return f"{self.title} ({self.blog.title})"
+        return f"{self.title}"
 
 class Comment(models.Model):
     # section = models.ForeignKey(Section, related_name='comments', on_delete=models.CASCADE)
