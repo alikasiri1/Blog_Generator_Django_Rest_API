@@ -1,9 +1,5 @@
-from transformers import pipeline
 import cohere
-import pypdf
-import textwrap
 import json
-
 from django.conf import settings
 import os
 
@@ -63,16 +59,13 @@ def generate_card_topics(prompt: str = "", docs: str = "", num_cards: int = 5):
             "topics": {
                 "type": "array",
                 "items": {"type": "string"},
-                "minItems": max(1, int(num_cards)),
-                "maxItems": max(1, int(num_cards)),
             }
         },
         "required": ["topics"],
-        "additionalProperties": False,
     }
 
     res = client.chat(
-        model="command-a-03-2025",
+        model="command-r-08-2024",
         messages=messages,
         response_format={
             "type": "json_object",
@@ -152,7 +145,7 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
     messages = _build_messages_for_blog(prompt=prompt, docs=docs, topics=topics, title=title)
 
     res = client.chat(
-        model="command-a-03-2025",
+        model="command-r-08-2024",
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -175,4 +168,3 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
     if not text:
         text = str(res)
     return text
-
