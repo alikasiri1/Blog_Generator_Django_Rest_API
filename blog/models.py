@@ -62,18 +62,25 @@ class Blog(models.Model):
 
 
 class DocumentContent(models.Model):
-    TYPE_CHOICES = [('PDF','PDF'), ('IMG','Image')]
+    TYPE_CHOICES = [
+        ('PDF', 'PDF'),
+        ('DOCX', 'Word Document'),
+        ('IMG', 'Image'),
+    ]
+
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, null=True, blank=True, related_name='documents')  
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
     title = models.CharField(max_length=255)
-    type = models.CharField(max_length=3, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=4, choices=TYPE_CHOICES)
     text_content = models.TextField()
     is_temporary = models.BooleanField(default=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    chunks_data = models.JSONField(null=True, blank=True)
+    url = models.URLField(max_length=500, null=True, blank=True) # for image url
+    summaries = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
+
     def mark_as_attached(self, blog):
-        """ when blog is created, this method is called """
+        """When a blog is created, this method is called."""
         self.blog = blog
         self.is_temporary = False
         self.save()

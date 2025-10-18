@@ -16,6 +16,31 @@ def _get_cohere_client_v2():
         client = cohere.Client(api_key)
     return client
 
+def summarize_chunk(chunk):
+    client = _get_cohere_client_v2()
+    response = client.chat(
+      model="command-r-08-2024",
+      messages=[
+          {"role": "system", "content": "You are a helpful assistant that summarizes text."},
+          {
+              "role": "user",
+              "content": f"Generate a JSON summarizing this text in a concise way:\n\n{chunk}, \n\n with the fields 'title' and 'summarizes_text' \n -Keep the 'title' filed concise (under 12 words)",
+          }
+      ],
+      response_format={
+          "type": "json_object",
+          "schema": {
+              "type": "object",
+              "properties": {
+                  "title": {"type": "string"},
+                  "summarizes_text": {"type": "string"}
+              },
+              "required": ["title", "summarizes_text"],
+          },
+     },
+  )
+    return json.loads(response.message.content[0].text)
+
 
 def _build_messages_for_topics(prompt: str, docs: str, num_cards: int, language: str):
     # Create a single user message combining prompt/docs with clear instructions

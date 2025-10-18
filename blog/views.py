@@ -21,8 +21,8 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-# from services.embeddings import get_top_k_chunks, embedding_model, splitter
-from services.generator import generate_blog_by_prompt
+from services.embeddings import  splitter, count_tokens
+from services.generate import summarize_chunk,generate_blog, generate_card_topics
 from services.image_generator import Image_generator
 # Create your views here.
 
@@ -130,15 +130,39 @@ class BlogViewSet(viewsets.ModelViewSet):
             documents = []
             for doc_id in temp_doc_ids:
                 try:
+                    doc_text = ""
                     doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
-                    documents.append({
-                        'title': doc.title,
-                        'text': doc.text_content
-                    })
+                    if doc.type == 'IMG':
+                        doc.text_content = extracted_img_text(doc.url)
+                        doc_text = doc.text_content
+                        doc.save()
+                    else:
+                        chunks = splitter.split_text(doc.text_content)
+                        if len(chunks) < 2:
+                            doc_text = doc.text_content
+                        else:
+                            if count_tokens(chunks[-1]) < 10000:
+                                chunks[-2] += " " + chunks[-1]
+                                chunks.pop(-1)
+                            
+                            summaries = []
+                            for i, chunk in enumerate(chunks):
+                                print(f"⏳ Summarizing chunk {i+1}/{len(chunks)} ...")
+                                try:
+                                    summary = summarize_chunk(chunk)
+                                    summaries.append(summary)
+                                    doc_text += summary['title'] + "\n"
+                                except Exception as e:
+                                    print(f"❌ Error summarizing chunk {i+1}: {e}")
+
+                            print("✅ All chunks summarized successfully")
+                            doc.summaries = summaries
+                            doc.save()
+
                 except DocumentContent.DoesNotExist:
                     continue
-            print(documents)
-            # topics = generate_topic(prompt , documents, num_cards)
+            print(doc_text)
+            # topics = generate_topic(prompt , doc_text, num_cards)
 
             # Simulate topic generation (replace with your actual logic)
             time.sleep(1)
@@ -173,7 +197,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                     'status': 'success',
                     'prompt': prompt,
                     'title': topics[0],
-                    'topics': topics[1:],
+                    'topics': topics,
                     'blog_slug': blog.slug,
                     'attached_documents': attached_count,
                     'deleted_other_temp_documents': deleted_count,
@@ -361,30 +385,42 @@ class BlogViewSet(viewsets.ModelViewSet):
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
             print(docs)
             if docs:
+                
                 all_chunks = []
                 all_embs = []
                 
 
                 for doc in docs:
-                    for chunk in doc.chunks_data:   # your JSON list of dicts
-                        chunk_dic = {}
-                        chunk_dic['text'] = chunk['text']
-                        chunk_dic['doc_title'] = doc.title
-                        all_chunks.append(chunk_dic)
-                        all_embs.append(chunk['embedding'])
-
-                top_chunks = get_top_k_chunks(
-                query_text=title,
-                all_chunks=all_chunks,  # from your JSONField
-                all_embs = all_embs,
-                embedding_model=embedding_model,
-                k=1
+                    if doc.type == 'IMG':
+                        pass
+                    else:
+                        if doc.summaries:
+                            pass
+                        else: 
+                            pass
+                
+                blog_text = generate_blog(
+                    prompt=prompt,
+                    docs= joined,       # or pass doc excerpts
+                    topics=topics,  # optional; works with or without
+                    title=title,
+                    language="Farsi",
+                    image_count=2 ,
+                    video_count=1
                 )
-                print(top_chunks)
-                print("--------------------------------")
-                content = generate_blog_by_prompt(prompt ,topics ,title , top_chunks)
+                content = blog_text['sections']
             else:
-                content = generate_blog_by_prompt(prompt , topics ,title, [])
+                blog_text = generate_blog(
+                    prompt=prompt,
+                    docs= [],       # or pass doc excerpts
+                    topics=topics,  # optional; works with or without
+                    title=title,
+                    language="Farsi",
+                    image_count=2 ,
+                    video_count=1
+                )
+                content = blog_text['sections']
+       
 
             # content = generate_blog_by_promt(promt , topics ,title, top_chunks)
             content = [
@@ -453,7 +489,9 @@ class BlogViewSet(viewsets.ModelViewSet):
             if file.content_type.startswith("image/"):
                 # Image: OCR
                 image = Image.open(file)
-                extracted_text = pytesseract.image_to_string(image, lang='fas+eng')
+                # extracted_text = pytesseract.image_to_string(image, lang='fas+eng')
+                image_url = image_generator.generate_image(image)
+                extracted_text= ""
                 doc_type = 'IMG'
             elif file.content_type == "application/pdf":
                 text = ""
@@ -479,23 +517,14 @@ class BlogViewSet(viewsets.ModelViewSet):
                 # continue  # skip unsupported files
             
 
-            chunks = splitter.split_text(extracted_text)
+            # chunks = splitter.split_text(extracted_text)
 
-            chunks_data = []
-            for idx, chunk in enumerate(chunks):
-                emb = embedding_model.encode(chunk).tolist()  # convert to list of floats
-                chunks_data.append({
-                    'order': idx,
-                    'text': chunk,          # keep the text too
-                    'embedding': emb        # embedding vector
-                })
             # 2. Create the DocumentContent object with all required fields
             doc = DocumentContent.objects.create(
                 user=request.user,          # <– required ForeignKey
                 title=file.name,            # <– required CharField
                 type=doc_type,              # <– required ChoiceField
                 text_content=extracted_text,
-                chunks_data=chunks_data,
                 is_temporary=True
             )
              # 3. Add to return list
