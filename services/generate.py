@@ -2,7 +2,19 @@ import cohere
 import json
 from django.conf import settings
 import os
+import requests
 
+
+def image_description(image):
+    client_id = getattr(settings, 'CLIENT_ID', None) or os.getenv('COHERE_API_KEY')
+    client_secret = getattr(settings, 'CLIENT_SECRET', None) or os.getenv('COHERE_API_KEY')
+    data = {
+        'data': image,
+        "caption_len": "long"
+        }
+    
+    description = requests.post('https://api.everypixel.com/v1/image_captioning', files=data, auth=(client_id, client_secret)).json()
+    return description
 
 def _get_cohere_client_v2():
     api_key = getattr(settings, 'COHERE_API_KEY', None) or os.getenv('COHERE_API_KEY')
@@ -298,8 +310,13 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
     for sec in sections:
         if isinstance(sec, dict):
             normalized_sections.append({
-                "section": sec.get("section", "") or "",
-                "content": sec.get("content", "") or ""
+                "heading": sec.get("section", "") or "",
+                "body": sec.get("content", "") or "",
+                "media": {
+                    "type":"",
+                    "prompt":"",
+                    "url":""
+                }
             })
     
     image_prompts = data.get("image_prompts", [])

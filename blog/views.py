@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import Blog, Comment,Admin, DocumentContent
 from django.utils.text import slugify
-
+import uuid
 from api.serializers import (
     BlogSerializer,
     Blog_List_Serializer 
@@ -21,9 +21,17 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-from services.embeddings import  splitter, count_tokens
-from services.generate import summarize_chunk,generate_blog, generate_card_topics
+# from services.embeddings import  splitter, count_tokens
+from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description
 from services.image_generator import Image_generator
+import requests
+import asyncio
+from crawl4ai import AsyncWebCrawler
+import subprocess
+from urllib.parse import urlparse
+
+
+
 # Create your views here.
 
 
@@ -40,6 +48,34 @@ class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
         work_domain = self.kwargs.get('work_domain')
         admin = get_object_or_404(Admin, work_domain=work_domain)
         return Blog.objects.filter(admin=admin, status='published')
+def is_safe_url(url: str) -> bool:
+    """Ensure url is a clean, simple http/https URL without injection attempts."""
+    
+    if not url or not isinstance(url, str):
+        return False
+
+    # Absolute basic filtering
+    forbidden_chars = [" ", ";", "|", "&", "$", "<", ">", "`"]
+    if any(c in url for c in forbidden_chars):
+        return False
+
+    # Use urlparse for final verification
+    parsed = urlparse(url)
+    if parsed.scheme not in ["http", "https"]:
+        return False
+    if not parsed.netloc:
+        return False
+
+    return True
+
+async def crawl_url(url):
+
+        async with AsyncWebCrawler() as crawler:
+            result = await crawler.arun(url=url)
+            return result.markdown
+
+
+
 
 
 class BlogViewSet(viewsets.ModelViewSet):
@@ -79,9 +115,10 @@ class BlogViewSet(viewsets.ModelViewSet):
     def generate_topic(self, request):
         try:
             prompt = request.data.get('prompt')
+            language = request.data.get('language')
             temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
             num_cards = int(request.data.get('num_cards'))
-
+            print(request.data)
             if num_cards:
                 if num_cards > 10 or num_cards < 1:
                     return JsonResponse({
@@ -161,8 +198,8 @@ class BlogViewSet(viewsets.ModelViewSet):
 
                 except DocumentContent.DoesNotExist:
                     continue
-            print(doc_text)
-            # topics = generate_topic(prompt , doc_text, num_cards)
+            # print(doc_text)
+            # topics = generate_topic(prompt , doc_text, num_cards, language)
 
             # Simulate topic generation (replace with your actual logic)
             time.sleep(1)
@@ -364,7 +401,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             prompt = request.data.get('prompt')
             title = request.data.get('title')
             topics = request.data.get('topics')
-
+            language = request.data.get('language')
+            print(request.data)
             if topics:
                 if len(topics) > 10 or len(topics) < 1:
                     return JsonResponse({
@@ -409,28 +447,52 @@ class BlogViewSet(viewsets.ModelViewSet):
                     video_count=1
                 )
                 content = blog_text['sections']
-            else:
-                blog_text = generate_blog(
-                    prompt=prompt,
-                    docs= [],       # or pass doc excerpts
-                    topics=topics,  # optional; works with or without
-                    title=title,
-                    language="Farsi",
-                    image_count=2 ,
-                    video_count=1
-                )
-                content = blog_text['sections']
+            # else:
+            #     pass
+            #     blog_text = generate_blog(
+            #         prompt=prompt,
+            #         docs= [],       # or pass doc excerpts
+            #         topics=topics,  # optional; works with or without
+            #         title=title,
+            #         language="Farsi",
+            #         image_count=2 ,
+            #         video_count=1
+            #     )
+            #     print(blog_text)
+            #     content = blog_text['sections']
        
 
-            # content = generate_blog_by_promt(promt , topics ,title, top_chunks)
+            # content = generate_blog(promt , topics ,title, top_chunks,language)
             content = [
-                {"heading": "Intro", "body": "This is the intro."},
-                {"heading": "Details", "body": "Some details here."}
+                {
+                    "heading": "Intro",
+                    "body": "This is the intro.",
+                    "media": {
+                        "type":"image",
+                        "prompt":"A person reading a book under a tree",
+                        "url":"https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t",
+                        "Position":"top",
+                        "Width":"100%",
+                        "Height":"100%"
+                    }
+                },
+                {
+                    "heading": "Details",
+                    "body": "Some details here.",
+                    "media": {
+                        "type":"",
+                        "prompt":"",
+                        "url":"",
+                        "Position":"top",
+                        "Width":"100%",
+                        "Height":"100%"
+                    }
+                }
             ]
             print(content)
             blog.content = content
             blog.title = title
-            blog.slug = slugify(title)
+            blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
             blog.save()
             
             return Response(BlogSerializer(blog).data)
@@ -477,7 +539,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         files = request.FILES.getlist('files')  # note: getlist for multiple files
         if not files:
             return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         # slug = request.data.get('slug')
         # blog = get_object_or_404(Blog, slug=slug, user=request.user)
         created_docs = []
@@ -489,9 +551,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             if file.content_type.startswith("image/"):
                 # Image: OCR
                 image = Image.open(file)
-                # extracted_text = pytesseract.image_to_string(image, lang='fas+eng')
-                image_url = image_generator.generate_image(image)
-                extracted_text= ""
+                # extracted_text = image_description(image) + "\n"
+                extracted_text += pytesseract.image_to_string(image, lang='fas+eng') 
                 doc_type = 'IMG'
             elif file.content_type == "application/pdf":
                 text = ""
@@ -503,15 +564,6 @@ class BlogViewSet(viewsets.ModelViewSet):
                 docx = DocxDocument(file)
                 text = "\n".join([p.text for p in docx.paragraphs])
                 doc_type = 'DOCX'
-            # elif file.content_type in [
-            #     "application/pdf",
-            #     "application/msword",
-            #     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            # ]:
-            #     # PDF or Word: extract text via textract
-            #     file_bytes = BytesIO(file.read())
-            #     extracted_text = textract.process(file_bytes).decode('utf-8', errors='ignore')
-
             else:
                 return Response({'error': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
                 # continue  # skip unsupported files
@@ -542,3 +594,34 @@ class BlogViewSet(viewsets.ModelViewSet):
             'created_documents': created_docs
         }, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def upload_temp_documents_url(self, request):
+        url = request.data.get('url')
+        print(url)
+        if not url:
+            return Response({'error': "URL is required"}, status=status.HTTP_400_BAD_REQUEST)
+            # Safety check
+        if not is_safe_url(url):
+            return Response(
+                {"error": "Invalid or unsafe URL"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        # Run the async crawler
+        try:
+            data = "test"#asyncio.run(crawl_url(url)) # run_crawl4ai(url)#
+            print(data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # doc = DocumentContent.objects.create(
+        #         user=request.user,          # <– required ForeignKey
+        #         title=url,            # <– required CharField
+        #         type='PDF',              # <– required ChoiceField
+        #         text_content=data,
+        #         is_temporary=True
+        #     )
+
+        # return Response({'status': 'success','content': data ,'document_id': str(doc.uuid)})
+        return Response({'status': 'success','content': data})
