@@ -555,14 +555,14 @@ class BlogViewSet(viewsets.ModelViewSet):
                 extracted_text += pytesseract.image_to_string(image, lang='fas+eng') 
                 doc_type = 'IMG'
             elif file.content_type == "application/pdf":
-                text = ""
+                # text = ""
                 with pdfplumber.open(file) as pdf:
                     for page in pdf.pages:
-                        text += page.extract_text() + "\n"
+                        extracted_text += page.extract_text() + "\n"
                 doc_type = 'PDF'
             elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 docx = DocxDocument(file)
-                text = "\n".join([p.text for p in docx.paragraphs])
+                extracted_text = "\n".join([p.text for p in docx.paragraphs])
                 doc_type = 'DOCX'
             else:
                 return Response({'error': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
@@ -607,7 +607,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
+        created_docs = []
         # Run the async crawler
         try:
             data = "test"#asyncio.run(crawl_url(url)) # run_crawl4ai(url)#
@@ -622,6 +622,11 @@ class BlogViewSet(viewsets.ModelViewSet):
         #         text_content=data,
         #         is_temporary=True
         #     )
-
-        # return Response({'status': 'success','content': data ,'document_id': str(doc.uuid)})
+        
+        # created_docs.append({
+        #         'document_id': str(doc.uuid),
+        #         'title': doc.title,
+        #         'text_preview': doc.text_content[:200]
+        #     })
+        # return Response({'status': 'success','created_documents': created_docs})
         return Response({'status': 'success','content': data})
