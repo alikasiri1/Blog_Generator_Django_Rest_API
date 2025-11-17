@@ -66,6 +66,7 @@ class DocumentContent(models.Model):
         ('PDF', 'PDF'),
         ('DOCX', 'Word Document'),
         ('IMG', 'Image'),
+        ('WEB', 'Webpage'),
     ]
 
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -76,7 +77,7 @@ class DocumentContent(models.Model):
     text_content = models.TextField()
     is_temporary = models.BooleanField(default=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    url = models.URLField(max_length=500, null=True, blank=True) # for image url
+    url = models.URLField(max_length=500, null=True, blank=True) # for image or webpage URL
     summaries = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
 
     def mark_as_attached(self, blog):

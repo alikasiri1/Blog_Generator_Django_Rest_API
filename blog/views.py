@@ -582,8 +582,8 @@ class BlogViewSet(viewsets.ModelViewSet):
              # 3. Add to return list
             created_docs.append({
                 'document_id': str(doc.uuid),
-                'title': doc.title,
-                'text_preview': doc.text_content[:200]
+                'title': doc.title
+                # 'text_preview': doc.text_content[:200]
             })
 
         if not created_docs:
@@ -614,19 +614,20 @@ class BlogViewSet(viewsets.ModelViewSet):
             print(data)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        parsed = urlparse(url)
+        doc = DocumentContent.objects.create(
+                user=request.user,          # <– required ForeignKey
+                title=f"{parsed.scheme}://{parsed.netloc}/",            # <– required CharField
+                type='WEB',              # <– required ChoiceField
+                text_content=data,
+                url = url,
+                is_temporary=True
+            )
         
-        # doc = DocumentContent.objects.create(
-        #         user=request.user,          # <– required ForeignKey
-        #         title=url,            # <– required CharField
-        #         type='PDF',              # <– required ChoiceField
-        #         text_content=data,
-        #         is_temporary=True
-        #     )
-        
-        # created_docs.append({
-        #         'document_id': str(doc.uuid),
-        #         'title': doc.title,
-        #         'text_preview': doc.text_content[:200]
-        #     })
-        # return Response({'status': 'success','created_documents': created_docs})
-        return Response({'status': 'success','content': data})
+        created_docs.append({
+                'document_id': str(doc.uuid),
+                'title': doc.url,
+            })
+        return Response({'status': 'success','created_documents': created_docs})
+        # return Response({'status': 'success','content': data})
