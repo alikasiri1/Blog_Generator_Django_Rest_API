@@ -21,7 +21,7 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-# from services.embeddings import  splitter, count_tokens
+from services.embeddings import  splitter, count_tokens, truncate_by_tokens
 from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description
 from services.image_generator import Image_generator
 import requests
@@ -30,24 +30,6 @@ from crawl4ai import AsyncWebCrawler
 import subprocess
 from urllib.parse import urlparse
 
-
-
-# Create your views here.
-
-
-class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for public access to published blogs.
-    No authentication required.
-    """
-    serializer_class = BlogSerializer
-    permission_classes = [AllowAny]
-    lookup_field = 'slug'
-
-    def get_queryset(self):
-        work_domain = self.kwargs.get('work_domain')
-        admin = get_object_or_404(Admin, work_domain=work_domain)
-        return Blog.objects.filter(admin=admin, status='published')
 def is_safe_url(url: str) -> bool:
     """Ensure url is a clean, simple http/https URL without injection attempts."""
     
@@ -74,8 +56,22 @@ async def crawl_url(url):
             result = await crawler.arun(url=url)
             return result.markdown
 
+# Create your views here.
 
 
+class PublicBlogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for public access to published blogs.
+    No authentication required.
+    """
+    serializer_class = BlogSerializer
+    permission_classes = [AllowAny]
+    lookup_field = 'slug'
+
+    def get_queryset(self):
+        work_domain = self.kwargs.get('work_domain')
+        admin = get_object_or_404(Admin, work_domain=work_domain)
+        return Blog.objects.filter(admin=admin, status='published')
 
 
 class BlogViewSet(viewsets.ModelViewSet):
@@ -118,6 +114,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             language = request.data.get('language')
             temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
             num_cards = int(request.data.get('num_cards'))
+            
             print(request.data)
             if num_cards:
                 if num_cards > 10 or num_cards < 1:
@@ -164,7 +161,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             #     image_url = ""
 
             image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
-            documents = []
+            documents = ""
             for doc_id in temp_doc_ids:
                 try:
                     doc_text = ""
@@ -195,11 +192,12 @@ class BlogViewSet(viewsets.ModelViewSet):
                             print("✅ All chunks summarized successfully")
                             doc.summaries = summaries
                             doc.save()
-
+                        documents += f"{doc.title}:\n```\n{doc_text}\n```"
+                        documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
                 except DocumentContent.DoesNotExist:
                     continue
-            # print(doc_text)
-            # topics = generate_topic(prompt , doc_text, num_cards, language)
+            print(documents)
+            # topics = generate_card_topics(prompt , documents, num_cards, language)
 
             # Simulate topic generation (replace with your actual logic)
             time.sleep(1)
@@ -402,6 +400,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             title = request.data.get('title')
             topics = request.data.get('topics')
             language = request.data.get('language')
+            temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
             print(request.data)
             if topics:
                 if len(topics) > 10 or len(topics) < 1:
@@ -419,50 +418,38 @@ class BlogViewSet(viewsets.ModelViewSet):
                     {'error': 'prompt is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            other_docs = DocumentContent.objects.filter(blog=blog,user=request.user).exclude(uuid__in=temp_doc_ids)
+            deleted_count, _ = other_docs.delete()
 
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
-            print(docs)
-            if docs:
-                
-                all_chunks = []
-                all_embs = []
-                
-
+            print(type(docs))
+            if len(docs) > 0:
+                documents = ""
                 for doc in docs:
-                    if doc.type == 'IMG':
-                        pass
-                    else:
-                        if doc.summaries:
-                            pass
-                        else: 
-                            pass
+                    try:
+                        doc_text = ""
+                        if doc.type == 'IMG':
+                            doc_text = doc.text_content
+                        else:
+                            if doc.summaries:
+                                for summary in doc.summaries:
+                                    doc_text += summary['summarizes_text'] + "\n"
+                            else: 
+                                doc_text = doc.text_content
+                            
+                        documents += f"{doc.title}:```\n{doc_text}\n```"
+                    except DocumentContent.DoesNotExist:
+                        continue
                 
-                blog_text = generate_blog(
-                    prompt=prompt,
-                    docs= joined,       # or pass doc excerpts
-                    topics=topics,  # optional; works with or without
-                    title=title,
-                    language="Farsi",
-                    image_count=2 ,
-                    video_count=1
-                )
-                content = blog_text['sections']
-            # else:
-            #     pass
-            #     blog_text = generate_blog(
-            #         prompt=prompt,
-            #         docs= [],       # or pass doc excerpts
-            #         topics=topics,  # optional; works with or without
-            #         title=title,
-            #         language="Farsi",
-            #         image_count=2 ,
-            #         video_count=1
-            #     )
-            #     print(blog_text)
-            #     content = blog_text['sections']
+                documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
+                print(documents)
+                content = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language)
+                
+            else: 
+                pass
+                content = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language)
        
-
-            # content = generate_blog(promt , topics ,title, top_chunks,language)
             content = [
                 {
                     "heading": "Intro",

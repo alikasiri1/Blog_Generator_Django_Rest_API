@@ -204,7 +204,7 @@ def _build_messages_for_blog(prompt: str, docs: str, topics: list | None, title:
 
 
 
-def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, title: str | None = None, max_tokens: int = 2000, temperature: float = 0.7, language: str = "English", image_count: int = 0, video_count: int = 0):
+def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, title: str | None = None, max_tokens: int = 2000, temperature: float = 0.7, language: str = "English", image_count: int = 1, video_count: int = 0):
     """
     Generate a structured blog response with multiple sections and media prompts.
     

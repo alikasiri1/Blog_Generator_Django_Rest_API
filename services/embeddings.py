@@ -15,6 +15,24 @@ tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 def count_tokens(text: str) -> int:
     """Return the number of tokens in a given text."""
     return len(tokenizer.encode(text, add_special_tokens=False))
+
+def truncate_by_tokens(text: str, max_tokens: int, total_tokens):
+
+    # Already within limit
+    if total_tokens <= max_tokens:
+        return text
+
+    # How many tokens we must remove
+    extra = total_tokens - max_tokens
+    print(f'removing {extra} extra words at the end of docs')
+    words = text.split()
+
+    # Remove at least `extra` words from the end
+    # (Not perfect but matches your requirement: no re-counting)
+    truncated_words = words[:-extra] if extra < len(words) else []
+
+    return " ".join(truncated_words)
+
 # def get_top_k_chunks(query_text, all_chunks, all_embs, embedding_model, k=5):
     # """
     # Retrieve top-k most relevant chunks to the query.
