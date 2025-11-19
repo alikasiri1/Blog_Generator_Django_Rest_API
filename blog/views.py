@@ -29,7 +29,7 @@ import asyncio
 from crawl4ai import AsyncWebCrawler
 import subprocess
 from urllib.parse import urlparse
-
+from bidi.algorithm import get_display
 def is_safe_url(url: str) -> bool:
     """Ensure url is a clean, simple http/https URL without injection attempts."""
     
@@ -192,7 +192,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                             print("✅ All chunks summarized successfully")
                             doc.summaries = summaries
                             doc.save()
-                        documents += f"{doc.title}:\n```\n{doc_text}\n```"
+                        documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
                         documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
                 except DocumentContent.DoesNotExist:
                     continue
@@ -201,8 +201,8 @@ class BlogViewSet(viewsets.ModelViewSet):
 
             # Simulate topic generation (replace with your actual logic)
             time.sleep(1)
-            topics = [f"{prompt}. This is a simulated","body",'conclusion']
-            
+            topics = [f"{prompt}","body",'conclusion']
+            print(topics)
             content = []
             for topic in topics[1:]:
                 content.append({'heading': topic, 'body': ""})
@@ -423,7 +423,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             deleted_count, _ = other_docs.delete()
 
             docs = DocumentContent.objects.filter(blog=blog, user=request.user)
-            print(type(docs))
+            print(type(docs),docs)
             if len(docs) > 0:
                 documents = ""
                 for doc in docs:
@@ -444,11 +444,11 @@ class BlogViewSet(viewsets.ModelViewSet):
                 
                 documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
                 print(documents)
-                content = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language)
+                # content = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language)
                 
             else: 
                 pass
-                content = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language)
+                # content = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language)
        
             content = [
                 {
@@ -544,8 +544,12 @@ class BlogViewSet(viewsets.ModelViewSet):
             elif file.content_type == "application/pdf":
                 # text = ""
                 with pdfplumber.open(file) as pdf:
+                    # for page in pdf.pages:
+                    #     extracted_text += page.extract_text() + "\n"
                     for page in pdf.pages:
-                        extracted_text += page.extract_text() + "\n"
+                        raw = page.extract_text() or ""          # handle None
+                        extracted_text += get_display(raw) + "\n"
+                        
                 doc_type = 'PDF'
             elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 docx = DocxDocument(file)
