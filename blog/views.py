@@ -30,6 +30,12 @@ from crawl4ai import AsyncWebCrawler
 import subprocess
 from urllib.parse import urlparse
 from bidi.algorithm import get_display
+from cloudinary.uploader import upload
+
+MAX_FILE_SIZE_MB = 10  # example: 10MB max
+MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
+
+
 def is_safe_url(url: str) -> bool:
     """Ensure url is a clean, simple http/https URL without injection attempts."""
     
@@ -622,3 +628,83 @@ class BlogViewSet(viewsets.ModelViewSet):
             })
         return Response({'status': 'success','created_documents': created_docs})
         # return Response({'status': 'success','content': data})
+
+
+    @action(detail=True, methods=['post'])
+    def upload_media(self, request, slug=None):
+        blog = self.get_object()
+        print(request.data)
+        prompt = request.data.get('prompt') 
+        print(type(prompt)) 
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate presence of file
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+            
+        media_type = ''
+        file = request.FILES['file']
+        if file.content_type.startswith("image/"):
+            media_type = 'image'
+        elif file.content_type.startswith("video/"):
+            media_type = 'video'
+        else:
+            return Response({'error': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        # Validate file size
+        if file.size > MAX_FILE_SIZE:
+            return Response(
+                {'error': f'File too large. Max size allowed is {MAX_FILE_SIZE_MB}MB.'},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        # Validate presence of doc index
+        doc_index = request.data.get('doc_index')
+        if doc_index is None:
+            return Response({'error': 'doc_index is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            doc_index = int(doc_index)
+        except ValueError:
+            return Response({'error': 'doc_index must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate content structure
+        if not isinstance(blog.content, list):
+            return Response({'error': 'Blog content must be a list.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # if not (0 <= doc_index < len(blog.content)):
+        #     return Response({'error': 'doc_index out of range.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+
+        try:
+            # result = upload(file)
+            # media_url = result["secure_url"]
+            time.sleep(2)
+            media_url = 'https://res.cloudinary.com/dbezwpqgi/image/upload/v1764088928/uexjn0bgx8ohc73a7av2.png'
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+        # Remove the temp file reference on the model
+        # blog.temp_media_file.delete(save=False)
+        media = {
+            "type":media_type,
+            "prompt":prompt,
+            "url":media_url,
+            "Position":"top",
+            "Width":"100%",
+            "Height":"100%"
+        }
+        print(media)
+        # Update JSON content
+        doc = blog.content[doc_index]
+        doc['media'] = media
+        blog.content[doc_index] = doc
+        blog.save(update_fields=['content'])
+
+        return Response({'url': media_url})
