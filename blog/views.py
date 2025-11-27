@@ -300,7 +300,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             }, status=500)
     
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['get'])
     def publish(self, request, slug=None):
         blog = self.get_object()
         
@@ -309,7 +309,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog.save()
         return Response(BlogSerializer(blog).data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['get'])
     def unpublish(self, request, slug=None):
         blog = self.get_object()
         
@@ -688,7 +688,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             time.sleep(2)
             media_url = 'https://res.cloudinary.com/dbezwpqgi/image/upload/v1764088928/uexjn0bgx8ohc73a7av2.png'
         except Exception as e:
-            return Response({'error': str(e)}, status=500)
+            return Response({'error': str(e)}, status=500) 
 
         # Remove the temp file reference on the model
         # blog.temp_media_file.delete(save=False)

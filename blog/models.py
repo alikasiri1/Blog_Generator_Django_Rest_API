@@ -32,6 +32,7 @@ class Blog(models.Model):
     title = models.CharField(max_length=200)
     # content = models.TextField(null = True , blank = True)
     content = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
+    settings = models.JSONField(null=True, blank=True) 
     slug = models.SlugField(max_length=200, null = True , blank = True)
     image_url = models.URLField(max_length=500, null=True, blank=True) 
     # temp_media_file = models.FileField(upload_to="blog_media/",null=True,blank=True)
