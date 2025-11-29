@@ -22,7 +22,7 @@ import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
 from services.embeddings import  splitter, count_tokens, truncate_by_tokens
-from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description
+from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description, FourOImageAPI , RunwayAPI
 from services.image_generator import Image_generator
 import requests
 import asyncio
@@ -31,6 +31,8 @@ import subprocess
 from urllib.parse import urlparse
 from bidi.algorithm import get_display
 from cloudinary.uploader import upload
+from django.http import StreamingHttpResponse
+
 
 MAX_FILE_SIZE_MB = 10  # example: 10MB max
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -455,7 +457,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             else: 
                 pass
                 # content = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language)
-       
+            
             content = [
                 {
                     "heading": "Intro",
@@ -635,7 +637,6 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog = self.get_object()
         print(request.data)
         prompt = request.data.get('prompt') 
-        print(type(prompt)) 
         if not prompt:
             return Response(
                 {'error': 'prompt is required'},
@@ -708,3 +709,139 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog.save(update_fields=['content'])
 
         return Response({'url': media_url})
+
+    @action(detail=True, methods=['post'])
+    def generate_media(self, request, slug=None):
+        blog = self.get_object()
+        print(request.data)
+        prompt = request.data.get('prompt') 
+        media_type = request.data.get('media_type') 
+        section_index = request.data.get('section_index') 
+
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not media_type:
+            return Response(
+                {'error': 'media type is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not section_index:
+            return Response(
+                {'error': 'section index is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if media_type not in ["video", "image"]:
+            return Response(
+                {'error': 'media_type should be image or video'}, 
+                status=400
+            )
+        if media_type == 'image':
+            api = FourOImageAPI()
+            task_id = api.generate_image(
+            prompt=prompt,
+            size='1:1',
+            nVariants=1,
+            isEnhance=True,
+            enableFallback=True
+            )
+
+            blog_content = blog.content
+            blog_content[section_index]['media']['media_task_id'] = task_id
+            blog.content = blog_content
+
+            blog.save()
+            return Response({"task_id": task_id, "message": "started"})
+        elif media_type == 'video':
+            video_api = RunwayAPI()
+
+
+
+    @action(detail=True, methods=['get'])
+    def media_stream(self, request, slug=None):
+        blog = self.get_object()
+
+        task_id = request.query_params.get("task_id")
+        media_type = request.query_params.get("media_type")   # <-- fixed typo
+
+        if not task_id:
+            return Response({"error": "task_id is required"}, status=400)
+
+        if media_type not in ["image", "video"]:
+            return Response({"error": "media_type must be 'image' or 'video'"}, status=400)
+
+        def event_stream():
+            if media_type == "image":
+                image_api = FourOImageAPI()
+                while True:
+                    try:
+                        status = image_api.get_task_status(task_id)
+
+                        flag = status["successFlag"]
+
+                        # still generating
+                        if flag == 0:
+                            progress = float(status.get("progress", 0)) * 100
+                            yield f"data: {json.dumps({'status': 'progress', 'progress': progress})}\n\n"
+                            time.sleep(3)
+                            continue
+
+                        # finished
+                        if flag == 1:
+                            url = status["response"]["resultUrls"][0]
+                            yield f"data: {json.dumps({'status': 'completed', 'url': url})}\n\n"
+                            return
+
+                        # failed
+                        if flag == 2:
+                            error = status.get("errorMessage", "generation failed")
+                            yield f"data: {json.dumps({'status': 'failed', 'error': error})}\n\n"
+                            return
+                    except Exception as e:
+                            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+                            return
+
+            elif media_type == "video":
+                video_api = RunwayAPI()
+                while True:
+                    try:
+                        status = video_api.get_task_status(task_id)
+                        state = status["state"]
+
+                        # waiting states
+                        if state in ["wait", "queueing", "generating"]:
+                            progress = status.get("progress", None)
+                            payload = {
+                                "status": state,
+                            }
+                            if progress is not None:
+                                payload["progress"] = float(progress)
+
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            time.sleep(4)
+                            continue
+
+                        # success
+                        if state == "success":
+                            url = status["resultUrl"]
+                            yield f"data: {json.dumps({'status': 'completed', 'url': url})}\n\n"
+                            return
+
+                        # fail
+                        if state == "fail":
+                            error = status.get("failMsg", "video generation failed")
+                            yield f"data: {json.dumps({'status': 'failed', 'error': error})}\n\n"
+                            return
+                    except Exception as e:
+                        yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+                        return
+        
+        # Streaming response
+        response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"  # required for nginx streaming
+
+        return response

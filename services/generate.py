@@ -3,7 +3,255 @@ import json
 from django.conf import settings
 import os
 import requests
+import time
 
+import requests
+import time
+
+class FourOImageAPI: 
+    def __init__(self):
+        self.api_key = getattr(settings, 'KIE_API_KEY', None) or os.getenv('KIE_API_KEY')
+        self.base_url = 'https://api.kie.ai/api/v1/gpt4o-image'
+        self.headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+    
+    def generate_image(self, **options):
+        response = requests.post(
+            f'{self.base_url}/generate',
+            headers=self.headers,
+            json=options
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Generation failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']['taskId']
+
+    def get_task_status(self, task_id):
+        response = requests.get(
+            f'{self.base_url}/record-info?taskId={task_id}',
+            headers={'Authorization': f'Bearer {self.api_key}'}
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Status check failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']
+
+    def get_download_url(self, image_url):
+        response = requests.post(
+            f'{self.base_url}/download-url',
+            headers=self.headers,
+            json={'imageUrl': image_url}
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Get download URL failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']['downloadUrl']
+
+    def poll_status(self, task_id):
+        """
+        Non-blocking status checker.
+        Returns:
+        {
+            "status": "processing" | "completed" | "failed",
+            "progress": float,
+            "url": str or None,
+            "error": str or None
+        }
+        """
+        try:
+            status = self.get_task_status(task_id)
+            flag = status["successFlag"]
+
+            # Processing
+            if flag == 0:
+                progress = float(status.get("progress", 0)) * 100
+                return {
+                    "status": "processing",
+                    "progress": progress,
+                    "url": None,
+                    "error": None
+                }
+
+            # Completed
+            if flag == 1:
+                result = status["response"]["resultUrls"][0]
+                return {
+                    "status": "completed",
+                    "progress": 100,
+                    "url": result,
+                    "error": None
+                }
+
+            # Failed
+            if flag == 2:
+                return {
+                    "status": "failed",
+                    "progress": None,
+                    "url": None,
+                    "error": status.get("errorMessage", "Unknown error")
+                }
+
+            # Unexpected
+            return {
+                "status": "unknown",
+                "progress": None,
+                "url": None,
+                "error": "Unexpected API response"
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "progress": None,
+                "url": None,
+                "error": str(e)
+            }
+
+
+
+class RunwayAPI:
+    def __init__(self):
+        self.api_key = getattr(settings, 'KIE_API_KEY', None) or os.getenv('KIE_API_KEY')
+        self.base_url = 'https://api.kie.ai/api/v1/runway'
+        self.headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+
+    def generate_video(self, **options):
+        response = requests.post(
+            f'{self.base_url}/generate',
+            headers=self.headers,
+            json=options
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Generation failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']['taskId']
+
+    def get_task_status(self, task_id):
+        response = requests.get(
+            f'{self.base_url}/record-detail?taskId={task_id}',
+            headers={'Authorization': f'Bearer {self.api_key}'}
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Status check failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']
+
+    def extend_video(self, task_id, prompt, quality='720p'):
+        data = {
+            'taskId': task_id,
+            'prompt': prompt,
+            'quality': quality
+        }
+
+        response = requests.post(
+            f'{self.base_url}/extend',
+            headers=self.headers,
+            json=data
+        )
+        result = response.json()
+
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Extension failed: {result.get('msg', 'Unknown error')}")
+
+        return result['data']['taskId']
+
+    def poll_status(self, task_id):
+        """
+        Non-blocking task polling.
+        Returns (example):
+        {
+            'status': 'queueing' | 'generating' | 'success' | 'fail',
+            'progress': None or float,
+            'url': None or str,
+            'error': None or str
+        }
+        """
+
+        try:
+            status = self.get_task_status(task_id)
+            state = status["state"]
+
+            # Convert API states into unified output
+
+            # "wait" → Task received but not started
+            if state == "wait":
+                return {
+                    "status": "waiting",
+                    "progress": None,
+                    "url": None,
+                    "error": None
+                }
+
+            # "queueing" → In queue
+            if state == "queueing":
+                return {
+                    "status": "queueing",
+                    "progress": None,
+                    "url": None,
+                    "error": None
+                }
+
+            # "generating" → Rendering video
+            if state == "generating":
+                progress = status.get("progress")
+                if progress is not None:
+                    progress = float(progress) * 100
+                return {
+                    "status": "generating",
+                    "progress": progress,
+                    "url": None,
+                    "error": None
+                }
+
+            # Success
+            if state == "success":
+                video_url = status.get("videoUrl") or status.get("outputUrl")
+                return {
+                    "status": "success",
+                    "progress": 100,
+                    "url": video_url,
+                    "error": None
+                }
+
+            # Failed
+            if state == "fail":
+                return {
+                    "status": "fail",
+                    "progress": None,
+                    "url": None,
+                    "error": status.get("failMsg", "Video generation failed")
+                }
+
+            # Unknown
+            return {
+                "status": "unknown",
+                "progress": None,
+                "url": None,
+                "error": f"Unhandled state: {state}"
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "progress": None,
+                "url": None,
+                "error": str(e)
+            }
 
 def image_description(image):
     client_id = getattr(settings, 'CLIENT_ID', None) or os.getenv('COHERE_API_KEY')
