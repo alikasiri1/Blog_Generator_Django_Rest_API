@@ -5,9 +5,6 @@ import os
 import requests
 import time
 
-import requests
-import time
-
 class FourOImageAPI: 
     def __init__(self):
         self.api_key = getattr(settings, 'KIE_API_KEY', None) or os.getenv('KIE_API_KEY')

@@ -21,7 +21,7 @@ from PIL import Image  # for opening image files
 import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
-from services.embeddings import  splitter, count_tokens, truncate_by_tokens
+from services.embeddings import   count_tokens, truncate_by_tokens , split_text_into_chunks #splitter,
 from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description, FourOImageAPI , RunwayAPI
 from services.image_generator import Image_generator
 import requests
@@ -33,7 +33,18 @@ from bidi.algorithm import get_display
 from cloudinary.uploader import upload
 from django.http import StreamingHttpResponse
 
+from rest_framework.decorators import  renderer_classes
+from rest_framework.renderers import BaseRenderer
+from rest_framework.renderers import JSONRenderer
 
+class SSERenderer(BaseRenderer):
+    media_type = 'text/event-stream'
+    format = 'sse'
+    charset = None
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+        
 MAX_FILE_SIZE_MB = 10  # example: 10MB max
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
@@ -179,7 +190,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                         doc_text = doc.text_content
                         doc.save()
                     else:
-                        chunks = splitter.split_text(doc.text_content)
+                        chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
                         if len(chunks) < 2:
                             doc_text = doc.text_content
                         else:
@@ -264,44 +275,6 @@ class BlogViewSet(viewsets.ModelViewSet):
                 'status': 'failed'
             }, status=500)
     
-
-    @action(detail=False, methods=['post'])
-    def generate_contents(self, request, admin_uuid=None):
-        print(request.data)
-        topic = request.data.get('topic')
-        
-        if not topic:
-            return Response(
-                {'error': 'Topic is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # content = generate_blog_by_topic(topic)
-            time.sleep(2)
-            content = f"api:{topic}"
-            print(content)
-
-            
-            return JsonResponse({
-                'status': 'success',
-                'topic': topic,
-                'content': content,
-                'timestamp': timezone.now().isoformat()
-            })
-            
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'error': 'Invalid JSON data',
-                'status': 'failed'
-            }, status=400)
-        except Exception as e:
-            return JsonResponse({
-                'error': str(e),
-                'status': 'failed'
-            }, status=500)
-    
-
     @action(detail=True, methods=['get'])
     def publish(self, request, slug=None):
         blog = self.get_object()
@@ -319,86 +292,6 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog.published_at = None
         blog.save()
         return Response(BlogSerializer(blog).data)
-    
-
-    @action(detail=True, methods=['post'])
-    def generate_content(self, request, slug=None):
-        try:
-            blog = self.get_object()
-            title = request.data.get('title')
-            topics = request.data.get('topics')
-
-            if topics:
-                if len(topics) > 10 or len(topics) < 1:
-                    return JsonResponse({
-                    'error': 'topics should be less than 10 and greater than 1',
-                    'status': 'failed'
-                }, status=400)
-            else:
-                return JsonResponse({
-                    'error': 'topics is required',
-                    'status': 'failed'
-                }, status=400)
-
-            if not title:
-                return Response(
-                    {'error': 'title is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-
-
-            # k = int(request.data.get('top_k', 5))
-
-
-            docs = DocumentContent.objects.filter(blog=blog, user=request.user)
-            print(docs)
-            if docs:
-                print("docs are there")
-                all_chunks = []
-                all_embs = []
-                chunk_dic = {}
-
-                for doc in docs:
-                    for chunk in doc.chunks_data:   # your JSON list of dicts
-                        chunk_dic['text'] = chunk['text']
-                        chunk_dic['doc_title'] = doc.title
-                        all_chunks.append(chunk_dic)
-                        all_embs.append(chunk['embedding'])
-                
-                top_chunks = get_top_k_chunks(
-                query_text=title,
-                all_chunks=all_chunks,  # from your JSONField
-                all_embs = all_embs,
-                embedding_model=embedding_model,
-                k=5
-            )
-                print(top_chunks)
-                print("--------------------------------")
-            else:
-                pass
-
-            
-            
-            # content = generate_blog_by_topic(topic)
-            content = [
-                {"heading": "Intro", "body": "This is the intro."},
-                {"heading": "Details", "body": "Some details here."}
-            ]
-            time.sleep(1)
-            print(content)
-            blog.title = title
-            blog.slug = slugify(title)
-            blog.content = content
-            blog.save()
-            
-            return Response(BlogSerializer(blog).data)
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
     
     @action(detail=True, methods=['post'])
     def generate_content_by_promt(self, request, slug=None):
@@ -468,7 +361,8 @@ class BlogViewSet(viewsets.ModelViewSet):
                         "url":"https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t",
                         "Position":"top",
                         "Width":"100%",
-                        "Height":"100%"
+                        "Height":"100%",
+                        'media_task_id':''
                     }
                 },
                 {
@@ -480,7 +374,8 @@ class BlogViewSet(viewsets.ModelViewSet):
                         "url":"",
                         "Position":"top",
                         "Width":"100%",
-                        "Height":"100%"
+                        "Height":"100%",
+                        'media_task_id':'fadfadfadfaf'
                     }
                 }
             ]
@@ -699,7 +594,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             "url":media_url,
             "Position":"top",
             "Width":"100%",
-            "Height":"100%"
+            "Height":"100%",
+            'media_task_id':''
         }
         print(media)
         # Update JSON content
@@ -717,7 +613,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         prompt = request.data.get('prompt') 
         media_type = request.data.get('media_type') 
         section_index = request.data.get('section_index') 
-
+        print(section_index)
         if not prompt:
             return Response(
                 {'error': 'prompt is required'},
@@ -733,39 +629,118 @@ class BlogViewSet(viewsets.ModelViewSet):
                 {'error': 'section index is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+        section_index = int(request.data.get('section_index'))
         if media_type not in ["video", "image"]:
             return Response(
                 {'error': 'media_type should be image or video'}, 
                 status=400
             )
         if media_type == 'image':
-            api = FourOImageAPI()
-            task_id = api.generate_image(
-            prompt=prompt,
-            size='1:1',
-            nVariants=1,
-            isEnhance=True,
-            enableFallback=True
-            )
-
+            # api = FourOImageAPI()
+            # task_id = api.generate_image(
+            # prompt=prompt,
+            # size='1:1',
+            # nVariants=1,
+            # isEnhance=True,
+            # enableFallback=True
+            # )
+            task_id = '3954ba0990424bb175ac01ae2ea3144e'
             blog_content = blog.content
             blog_content[section_index]['media']['media_task_id'] = task_id
+            blog_content[section_index]['media']['type'] = media_type
+            blog_content[section_index]['media']['prompt'] = prompt
             blog.content = blog_content
 
             blog.save()
             return Response({"task_id": task_id, "message": "started"})
         elif media_type == 'video':
             video_api = RunwayAPI()
+            
+            task_id = '3954ba0990424bb175ac01ae2ea3144e'
+            blog_content = blog.content
+            blog_content[section_index]['media']['media_task_id'] = task_id
+            blog_content[section_index]['media']['type'] = media_type
+            blog_content[section_index]['media']['prompt'] = prompt
+            blog.content = blog_content
 
-
-
-    @action(detail=True, methods=['get'])
-    def media_stream(self, request, slug=None):
+            blog.save()
+            return Response({"task_id": task_id, "message": "started"})
+    
+    @action(detail=True, methods=['post'])
+    def media_stream_2(self, request, slug=None):
         blog = self.get_object()
+        print(request.data)
+        task_id = request.data.get('task_id') 
+        media_type = request.data.get("media_type") 
+        if not task_id:
+            return Response({"error": "task_id is required"}, status=400)
 
-        task_id = request.query_params.get("task_id")
-        media_type = request.query_params.get("media_type")   # <-- fixed typo
+        if media_type not in ["image", "video"]:
+            return Response({"error": "media_type must be 'image' or 'video'"}, status=400)
+        if media_type == "image":
+            try:
+                image_api = FourOImageAPI()
+                status = image_api.get_task_status(task_id)
+                
+                flag = status["successFlag"]
+                if flag == 0:
+                    progress = float(status.get("progress", 0)) * 100
+                    return Response({'status': 'progress', 'progress': progress})
+
+                # finished
+                if flag == 1:
+                    url = status["response"]["resultUrls"][0]
+                    for card in blog.content:
+                        if card['media']['media_task_id'] == task_id :
+                            card['media']['media_task_id'] = ''
+                            card['media']['url'] = url
+                    blog.save()
+                    return Response({'status': 'completed', 'url': url})
+
+                # failed
+                if flag == 2:
+                    error = status.get("errorMessage", "generation failed")
+                    return Response({'status': 'failed', 'error': error})
+
+            except Exception as e:
+                print(str(e))
+                return Response({'status': 'error', 'error': str(e)}, status=400)
+        elif media_type == "video":
+            video_api = RunwayAPI()
+            try:
+                status = video_api.get_task_status(task_id)
+                state = status["state"]
+                # waiting states
+                if state in ["wait", "queueing", "generating"]:
+                    progress = status.get("progress", None)
+                    payload = {
+                        "status": state,
+                    }
+                    if progress is not None:
+                        payload["progress"] = float(progress)
+
+                    return Response(payload)
+
+                # success
+                if state == "success":
+                    url = status["resultUrl"]
+                    return Response({'status': 'completed', 'url': url})
+
+                # fail
+                if state == "fail":
+                    error = status.get("failMsg", "video generation failed")
+                    return Response({'status': 'failed', 'error': error})
+                
+            except Exception as e:
+                return Response({'status': 'error', 'error': str(e)}, status=400)
+
+
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    @renderer_classes([SSERenderer, JSONRenderer])
+    def media_stream(self, request, slug=None):
+
+        task_id = request.GET.get("task_id")
+        media_type = request.GET.get("media_type")   # <-- fixed typo
 
         if not task_id:
             return Response({"error": "task_id is required"}, status=400)
@@ -775,11 +750,22 @@ class BlogViewSet(viewsets.ModelViewSet):
 
         def event_stream():
             if media_type == "image":
-                image_api = FourOImageAPI()
+                # image_api = FourOImageAPI()
+                status = {
+                                "taskId": "task_4o_abc123",
+                                "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
+                                "completeTime": None,
+                                "response": None,
+                                "successFlag": 0,
+                                "errorCode": None,
+                                "errorMessage": None,
+                                "createTime": "2024-01-15 10:30:00",
+                                "progress": "0.50"
+                            }
                 while True:
                     try:
-                        status = image_api.get_task_status(task_id)
-
+                        # status = image_api.get_task_status(task_id)
+                        
                         flag = status["successFlag"]
 
                         # still generating
@@ -787,6 +773,21 @@ class BlogViewSet(viewsets.ModelViewSet):
                             progress = float(status.get("progress", 0)) * 100
                             yield f"data: {json.dumps({'status': 'progress', 'progress': progress})}\n\n"
                             time.sleep(3)
+                            status= {
+                                    "taskId": "task_4o_abc123",
+                                    "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
+                                    "completeTime": "2024-01-15 10:35:00",
+                                    "response": {
+                                        "resultUrls": [
+                                            "https://example.com/generated-image.png"
+                                        ]
+                                    },
+                                    "successFlag": 1,
+                                    "errorCode": None,
+                                    "errorMessage": None,
+                                    "createTime": "2024-01-15 10:30:00",
+                                    "progress": "1.00"
+                                }
                             continue
 
                         # finished
@@ -840,8 +841,9 @@ class BlogViewSet(viewsets.ModelViewSet):
                         return
         
         # Streaming response
-        response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+        response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
         response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"  # required for nginx streaming
+        response["X-Accel-Buffering"] = "no"
+
 
         return response
