@@ -1,4 +1,5 @@
 # Create your views here.
+# from patchright.async_api import expect
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -23,7 +24,7 @@ import pdfplumber
 from docx import Document as DocxDocument
 from services.embeddings import   count_tokens, truncate_by_tokens , split_text_into_chunks #splitter,
 from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description, FourOImageAPI , RunwayAPI
-from services.image_generator import Image_generator
+# from services.image_generator import Image_generator
 import requests
 import asyncio
 from crawl4ai import AsyncWebCrawler
@@ -163,32 +164,18 @@ class BlogViewSet(viewsets.ModelViewSet):
             ).exclude(uuid__in=temp_doc_ids)
             deleted_count, _ = other_docs.delete()
 
-            # Get the admin
-            # admin = get_object_or_404(Admin ,user=self.request.user)
-            # if admin.user != self.request.user:
-            #     raise PermissionDenied("You are not authorized to access this admin profile.")
             
-            # try:
-            #     image_generator = Image_generator()
-            #     task_id = image_generator.create_task_image("A serene lake at sunrise")
-            #     if not task_id:
-            #         image_url = ""
-            #     image_info = image_generator.check_status()
-            #     image_url = image_info['data']['response']['resultUrls'][0]
-            #     # image_generator.download(image_info, 'lake.png')
-            # except:
-            #     image_url = ""
 
             image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
             documents = ""
             for doc_id in temp_doc_ids:
                 try:
                     doc_text = ""
-                    doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
+                    doc = DocumentContent.objects.get(uuid=doc_id , is_temporary=True)
+                    print(doc.type)
                     if doc.type == 'IMG':
-                        doc.text_content = extracted_img_text(doc.url)
                         doc_text = doc.text_content
-                        doc.save()
+                        # doc.save()
                     else:
                         chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
                         if len(chunks) < 2:
@@ -211,15 +198,15 @@ class BlogViewSet(viewsets.ModelViewSet):
                             print("✅ All chunks summarized successfully")
                             doc.summaries = summaries
                             doc.save()
-                        documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
-                        documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
+                    documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
+                    documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
                 except DocumentContent.DoesNotExist:
                     continue
             print(documents)
             # topics = generate_card_topics(prompt , documents, num_cards, language)
 
             # Simulate topic generation (replace with your actual logic)
-            time.sleep(1)
+            # time.sleep(1)
             topics = [f"{prompt}","body",'conclusion']
             print(topics)
             content = []
@@ -236,7 +223,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             serializer = BlogSerializer(data=blog_data, context={'request': request})
             if serializer.is_valid():
                 blog = serializer.save()
-                
+                blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'light'}
+                blog.save()
                 # Attach documents specified in request
                 attached_count = 0
                 for doc_id in temp_doc_ids:
@@ -270,10 +258,12 @@ class BlogViewSet(viewsets.ModelViewSet):
                 'status': 'failed'
             }, status=400)
         except Exception as e:
+            print("🔥 INTERNAL ERROR:", e)
             return JsonResponse({
                 'error': str(e),
                 'status': 'failed'
             }, status=500)
+
     
     @action(detail=True, methods=['get'])
     def publish(self, request, slug=None):
@@ -345,44 +335,95 @@ class BlogViewSet(viewsets.ModelViewSet):
                 
                 documents = truncate_by_tokens(documents ,100000 ,count_tokens(documents))
                 print(documents)
-                # content = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language)
+                generated_blog = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language ,image_count=1, video_count=0)
                 
             else: 
                 pass
-                # content = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language)
+                generated_blog = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language ,image_count=1, video_count=0)
             
-            content = [
-                {
-                    "heading": "Intro",
-                    "body": "This is the intro.",
-                    "media": {
-                        "type":"image",
-                        "prompt":"A person reading a book under a tree",
-                        "url":"https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t",
-                        "Position":"top",
-                        "Width":"100%",
-                        "Height":"100%",
-                        'media_task_id':''
-                    }
-                },
-                {
-                    "heading": "Details",
-                    "body": "Some details here.",
-                    "media": {
+            try:
+                api = FourOImageAPI()
+                task_id = api.generate_image(
+                prompt=prompt,
+                size='1:1',
+                nVariants=1,
+                isEnhance=True,
+                enableFallback=True
+                )
+            except:
+                task_id = ""
+            
+            # content = [
+            #     {
+            #         "heading": "Intro",
+            #         "body": "This is the intro.",
+            #         "media": {
+            #             "type":"image",
+            #             "prompt":"A person reading a book under a tree",
+            #             "url":"https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t",
+            #             "Position":"top",
+            #             "Width":"100%",
+            #             "Height":"100%",
+            #             'media_task_id':''
+            #         }
+            #     },
+            #     {
+            #         "heading": "Details",
+            #         "body": "Some details here.",
+            #         "media": {
+            #             "type":"",
+            #             "prompt":"",
+            #             "url":"",
+            #             "Position":"top",
+            #             "Width":"100%",
+            #             "Height":"100%",
+            #             'media_task_id':'fadfadfadfaf'
+            #         }
+            #     }
+            # ]
+            content = []
+            media =  {
                         "type":"",
                         "prompt":"",
                         "url":"",
                         "Position":"top",
                         "Width":"100%",
                         "Height":"100%",
-                        'media_task_id':'fadfadfadfaf'
+                        'media_task_id':''
                     }
-                }
-            ]
+            for section in generated_blog['sections']:
+                subsection = {}
+                subsection['heading'] = section['section']
+                subsection['body'] = section['content']
+                subsection['media'] = media
+
+                content.append(subsection)
+                
+                
+            try:
+                api = FourOImageAPI()
+                task_id = api.generate_image(
+                prompt= generated_blog['image_prompts'][0],
+                size='1:1',
+                nVariants=1,
+                isEnhance=True,
+                enableFallback=True
+                )
+                media["type"] = "image"
+                media["prompt"] = generated_blog['image_prompts'][0]
+            except:
+                pass
+                
+            content[0]['media'] = media
             print(content)
             blog.content = content
             blog.title = title
-            blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
+            slug = slugify(title)
+
+            if len(slug) > 1 :
+                blog.slug = slug
+            else:
+                blog.slug = f"{uuid.uuid4().hex[:8]}"
             blog.save()
             
             return Response(BlogSerializer(blog).data)
@@ -430,8 +471,6 @@ class BlogViewSet(viewsets.ModelViewSet):
         if not files:
             return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # slug = request.data.get('slug')
-        # blog = get_object_or_404(Blog, slug=slug, user=request.user)
         created_docs = []
         print(files)
         for file in files:
@@ -441,7 +480,10 @@ class BlogViewSet(viewsets.ModelViewSet):
             if file.content_type.startswith("image/"):
                 # Image: OCR
                 image = Image.open(file)
-                # extracted_text = image_description(image) + "\n"
+                # try:
+                #     extracted_text = image_description(image) + "Also document contains below text:\n"
+                # except:
+                #     return Response({'error': 'We can work on image description write know'}, status=status.HTTP_404_NOT_FOUND)
                 extracted_text += pytesseract.image_to_string(image, lang='fas+eng') 
                 doc_type = 'IMG'
             elif file.content_type == "application/pdf":
@@ -579,10 +621,10 @@ class BlogViewSet(viewsets.ModelViewSet):
  
 
         try:
-            # result = upload(file)
-            # media_url = result["secure_url"]
-            time.sleep(2)
-            media_url = 'https://res.cloudinary.com/dbezwpqgi/image/upload/v1764088928/uexjn0bgx8ohc73a7av2.png'
+            result = upload(file)
+            media_url = result["secure_url"] 
+            # time.sleep(2)
+            # media_url = 'https://res.cloudinary.com/dbezwpqgi/image/upload/v1764088928/uexjn0bgx8ohc73a7av2.png'
         except Exception as e:
             return Response({'error': str(e)}, status=500) 
 
@@ -600,7 +642,9 @@ class BlogViewSet(viewsets.ModelViewSet):
         print(media)
         # Update JSON content
         doc = blog.content[doc_index]
-        doc['media'] = media
+        doc['media']['type'] = media_type
+        doc['media']['url'] = media_url
+        doc['media']['media_task_id'] = ''
         blog.content[doc_index] = doc
         blog.save(update_fields=['content'])
 

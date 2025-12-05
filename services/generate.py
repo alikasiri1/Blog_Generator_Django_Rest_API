@@ -251,8 +251,8 @@ class RunwayAPI:
             }
 
 def image_description(image):
-    client_id = getattr(settings, 'CLIENT_ID', None) or os.getenv('COHERE_API_KEY')
-    client_secret = getattr(settings, 'CLIENT_SECRET', None) or os.getenv('COHERE_API_KEY')
+    client_id = getattr(settings, 'CLIENT_ID', None) #or os.getenv('COHERE_API_KEY')
+    client_secret = getattr(settings, 'CLIENT_SECRET', None) #or os.getenv('COHERE_API_KEY')
     data = {
         'data': image,
         "caption_len": "long"
@@ -337,7 +337,7 @@ def generate_card_topics(prompt: str = "", docs: str = "", num_cards: int = 5, l
 
     client = _get_cohere_client_v2()
     messages = _build_messages_for_topics(prompt=prompt, docs=docs, num_cards=num_cards, language=language)
-
+    print(messages)
     schema = {
         "type": "object",
         "properties": {

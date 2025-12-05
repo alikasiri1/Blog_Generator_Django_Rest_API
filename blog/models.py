@@ -30,7 +30,6 @@ class Blog(models.Model):
 
     admin = models.ForeignKey(Admin, on_delete=models.CASCADE, related_name='blogs', null = True , blank = True)
     title = models.CharField(max_length=200)
-    # content = models.TextField(null = True , blank = True)
     content = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
     settings = models.JSONField(null=True, blank=True) 
     slug = models.SlugField(max_length=200, null = True , blank = True)

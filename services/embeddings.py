@@ -1,6 +1,6 @@
 # from sentence_transformers import SentenceTransformer
 # from sklearn.metrics.pairwise import cosine_similarity
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+# from langchain.text_splitter import RecursiveCharacterTextSplitter
 # from transformers import GPT2Tokenizer
 # import numpy as np
 
