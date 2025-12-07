@@ -30,7 +30,8 @@ class FourOImageAPI:
     def get_task_status(self, task_id):
         response = requests.get(
             f'{self.base_url}/record-info?taskId={task_id}',
-            headers={'Authorization': f'Bearer {self.api_key}'}
+            headers={'Authorization': f'Bearer {self.api_key}'},
+            
         )
         result = response.json()
 

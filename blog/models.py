@@ -43,11 +43,17 @@ class Blog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug or Blog.objects.get(pk=self.pk).title != self.title:
-            base_slug = f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}" #slugify(self.title) 
-            slug = base_slug
+            slug = slugify(self.title)
+            if len(slug) > 1 :
+                pass
+            else:
+                slug = f"{uuid.uuid4().hex[:8]}"
+
+            # base_slug = f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}" #slugify(self.title) 
+            # slug = base_slug
             counter = 1
             while Blog.objects.filter(slug=slug, admin=self.admin).exclude(pk=self.pk).exists():
-                slug = f"{base_slug}-{counter}"
+                slug = f"{slug}-{counter}"
                 counter += 1
             self.slug = slug
         super().save(*args, **kwargs)

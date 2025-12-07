@@ -68,13 +68,23 @@ class CommentSerializer(serializers.ModelSerializer):
             return CommentSerializer(replies, many=True).data
         return []
 
+class BlogAdminInfoSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+
+
+    class Meta:
+        model = Admin
+        fields = ('first_name', 'last_name', 'work_domain')
+        read_only_fields = fields
+
 class BlogSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False, allow_null=True)
-
+    admin_info = BlogAdminInfoSerializer(source='admin', read_only=True)
     class Meta:
         model = Blog
         fields = ('id', 'title', 'content', 'slug', 'status', 
-                 'created_at', 'updated_at', 'published_at' , 'image' , 'image_url','settings')
+                 'created_at', 'updated_at', 'published_at' , 'image' , 'image_url','settings','admin_info')
         read_only_fields = ('id' ,'created_at', 'updated_at', 'published_at')
 
     def create(self, validated_data):

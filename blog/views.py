@@ -210,8 +210,18 @@ class BlogViewSet(viewsets.ModelViewSet):
             topics = [f"{prompt}","body",'conclusion']
             print(topics)
             content = []
-            for topic in topics[1:]:
-                content.append({'heading': topic, 'body': ""})
+            media =  {
+                        "type":"",
+                        "prompt":"",
+                        "url":"",
+                        "Position":"top",
+                        "Width":"100%",
+                        "Height":"100%",
+                        'media_task_id':""
+                    }
+            for topic in topics:
+                content.append({'heading': topic, 'body': "", 'media':media})
+            print(content)
             # Create a blog with the generated topic
             blog_data = {
                 'title': topics[0],  # Using response as title
@@ -340,18 +350,8 @@ class BlogViewSet(viewsets.ModelViewSet):
             else: 
                 pass
                 generated_blog = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language ,image_count=1, video_count=0)
-            
-            try:
-                api = FourOImageAPI()
-                task_id = api.generate_image(
-                prompt=prompt,
-                size='1:1',
-                nVariants=1,
-                isEnhance=True,
-                enableFallback=True
-                )
-            except:
-                task_id = ""
+
+
             
             # content = [
             #     {
@@ -389,7 +389,7 @@ class BlogViewSet(viewsets.ModelViewSet):
                         "Position":"top",
                         "Width":"100%",
                         "Height":"100%",
-                        'media_task_id':''
+                        'media_task_id':""
                     }
             for section in generated_blog['sections']:
                 subsection = {}
@@ -401,14 +401,6 @@ class BlogViewSet(viewsets.ModelViewSet):
                 
                 
             try:
-                api = FourOImageAPI()
-                task_id = api.generate_image(
-                prompt= generated_blog['image_prompts'][0],
-                size='1:1',
-                nVariants=1,
-                isEnhance=True,
-                enableFallback=True
-                )
                 media["type"] = "image"
                 media["prompt"] = generated_blog['image_prompts'][0]
             except:
@@ -723,9 +715,34 @@ class BlogViewSet(viewsets.ModelViewSet):
             return Response({"error": "media_type must be 'image' or 'video'"}, status=400)
         if media_type == "image":
             try:
-                image_api = FourOImageAPI()
-                status = image_api.get_task_status(task_id)
-                
+                # image_api = FourOImageAPI()
+                # status = image_api.get_task_status(task_id)
+                status = {
+                                    "taskId": "task_4o_abc123",
+                                    "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
+                                    "completeTime": "2024-01-15 10:35:00",
+                                    "response": {
+                                        "resultUrls": [
+                                            "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+                                        ]
+                                    },
+                                    "successFlag": 1,
+                                    "errorCode": None,
+                                    "errorMessage": None,
+                                    "createTime": "2024-01-15 10:30:00",
+                                    "progress": "1.00"
+                                }
+                # status = {
+                #                 "taskId": "task_4o_abc123",
+                #                 "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
+                #                 "completeTime": None,
+                #                 "response": None,
+                #                 "successFlag": 0,
+                #                 "errorCode": None,
+                #                 "errorMessage": None,
+                #                 "createTime": "2024-01-15 10:30:00",
+                #                 "progress": "0.90"
+                #             }
                 flag = status["successFlag"]
                 if flag == 0:
                     progress = float(status.get("progress", 0)) * 100
