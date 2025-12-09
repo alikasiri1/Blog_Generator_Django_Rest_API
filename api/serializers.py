@@ -2,6 +2,9 @@ from rest_framework import serializers
 # from django.contrib.auth.models import User
 from blog.models import Blog, Comment, Admin, CustomUser ,DocumentContent
 from django.utils.text import slugify
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 # from .models import Admin
 
 class UserSerializer(serializers.ModelSerializer):
@@ -52,6 +55,65 @@ class AdminSerializer(serializers.ModelSerializer):
         instance.save()
 
         return instance
+
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    work_domain = serializers.CharField()
+
+    def validate(self, data):
+        print(data)
+        if CustomUser.objects.filter(email=data["email"]).exists():
+            raise serializers.ValidationError({"email": "This email is already taken."})
+
+        if CustomUser.objects.filter(username=data["username"]).exists():
+            raise serializers.ValidationError({"username": "This username is already taken."})
+
+        if Admin.objects.filter(work_domain=data["work_domain"]).exists():
+            raise serializers.ValidationError({"work_domain": "This work domain is already used."})
+
+        return data
+
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data["email"],
+            password=validated_data["password"],
+        )
+
+        admin = Admin.objects.create(
+            user=user,
+            work_domain=validated_data["work_domain"]
+        )
+
+        return admin
+
+class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = "email"   # this makes JWT use "email" instead of "username"
+
+    def validate(self, attrs):
+        print(attrs)
+        email = attrs.get("email")
+        password = attrs.get("password")
+
+        # authenticate by email
+        user = authenticate(email=email, password=password)
+        if not user:
+            raise serializers.ValidationError("Invalid email or password")
+
+        data = super().validate(attrs)
+
+        # Add admin info
+        try:
+            admin = Admin.objects.get(user=user)
+            data["work_domain"] = str(admin.work_domain)
+            data["admin_uuid"] = str(admin.uuid)
+        except Admin.DoesNotExist:
+            data["work_domain"] = None
+            data["admin_uuid"] = None
+
+        return data
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

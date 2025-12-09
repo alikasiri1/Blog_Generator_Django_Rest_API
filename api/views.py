@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from blog.models import  Comment,Admin,CustomUser
 
-from .serializers import CommentSerializer
+from .serializers import CommentSerializer , RegisterSerializer , EmailTokenObtainPairSerializer
 
 from .serializers import AdminSerializer, UserSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -31,13 +31,10 @@ class AdminViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
-        serializer = UserSerializer(data=request.data)
+        serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
-            admin = Admin.objects.create(user=user)
-            return Response({
-                'admin': AdminSerializer(admin).data
-            }, status=status.HTTP_201_CREATED)
+            admin = serializer.save()
+            return Response(AdminSerializer(admin).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['patch']) 
@@ -56,41 +53,44 @@ class AdminViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CommentViewSet(viewsets.ModelViewSet):
-    serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
+# class CommentViewSet(viewsets.ModelViewSet):
+#     serializer_class = CommentSerializer
+#     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        admin_uuid = self.kwargs.get('admin_uuid')
-        admin = get_object_or_404(Admin, uuid=admin_uuid)
+#     def get_queryset(self):
+#         admin_uuid = self.kwargs.get('admin_uuid')
+#         admin = get_object_or_404(Admin, uuid=admin_uuid)
         
-        # Ensure the authenticated user is the admin
-        if admin.user != self.request.user:
-            return Comment.objects.none()
+#         # Ensure the authenticated user is the admin
+#         if admin.user != self.request.user:
+#             return Comment.objects.none()
             
-        return Comment.objects.filter(section__blog__admin=admin)
+#         return Comment.objects.filter(section__blog__admin=admin)
 
-    def perform_create(self, serializer):
-        section_id = self.request.data.get('section')
-        section = get_object_or_404(Section, id=section_id)
-        serializer.save(user=self.request.user, section=section) 
+#     def perform_create(self, serializer):
+#         section_id = self.request.data.get('section')
+#         section = get_object_or_404(Section, id=section_id)
+#         serializer.save(user=self.request.user, section=section) 
+
+# class CustomTokenObtainPairView(TokenObtainPairView):
+#     def post(self, request, *args, **kwargs):
+#         response = super().post(request, *args, **kwargs)
+#         print(request.data)
+#         # Get username from request data
+#         username = request.data.get('username')
+        
+#         # Get the user from the username
+#         try:
+#             user = CustomUser.objects.get(username=username)
+#             admin = Admin.objects.get(user=user) 
+#             # Add admin work_domain to the response
+#             response.data['work_domain'] = str(admin.work_domain)
+#             response.data['admin_uuid'] = str(admin.uuid)
+#         except (CustomUser.DoesNotExist, Admin.DoesNotExist):
+#             response.data['work_domain'] = None
+#             response.data['admin_uuid'] = None
+            
+#         return response 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        
-        # Get username from request data
-        username = request.data.get('username')
-        
-        # Get the user from the username
-        try:
-            user = CustomUser.objects.get(username=username)
-            admin = Admin.objects.get(user=user) 
-            # Add admin work_domain to the response
-            response.data['work_domain'] = str(admin.work_domain)
-            response.data['admin_uuid'] = str(admin.uuid)
-        except (CustomUser.DoesNotExist, Admin.DoesNotExist):
-            response.data['work_domain'] = None
-            response.data['admin_uuid'] = None
-            
-        return response 
+    serializer_class = EmailTokenObtainPairSerializer

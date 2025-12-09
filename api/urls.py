@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
 from .views import (
-    AdminViewSet, CommentViewSet, 
+    AdminViewSet, 
     CustomTokenObtainPairView
 )
 from blog.views import BlogViewSet, PublicBlogViewSet
@@ -11,7 +11,7 @@ from blog.views import BlogViewSet, PublicBlogViewSet
 admin_router = DefaultRouter() 
 admin_router.register(r'blogs', BlogViewSet, basename='admin-blog')
 # admin_router.register(r'sections', SectionViewSet, basename='admin-section')
-admin_router.register(r'comments', CommentViewSet, basename='admin-comment')
+# admin_router.register(r'comments', CommentViewSet, basename='admin-comment')
 admin_router.register(r'profile', AdminViewSet, basename='admin')
 
 # Public router for viewing published blogs

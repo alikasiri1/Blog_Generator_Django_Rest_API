@@ -4,6 +4,7 @@ from django.conf import settings
 import os
 import requests
 import time
+import io
 
 class FourOImageAPI: 
     def __init__(self):
@@ -251,16 +252,43 @@ class RunwayAPI:
                 "error": str(e)
             }
 
-def image_description(image):
-    client_id = getattr(settings, 'CLIENT_ID', None) #or os.getenv('COHERE_API_KEY')
-    client_secret = getattr(settings, 'CLIENT_SECRET', None) #or os.getenv('COHERE_API_KEY')
-    data = {
-        'data': image,
-        "caption_len": "long"
-        }
+# def image_description(image):
+#     client_id = getattr(settings, 'CLIENT_ID', None) #or os.getenv('COHERE_API_KEY')
+#     client_secret = getattr(settings, 'CLIENT_SECRET', None) #or os.getenv('COHERE_API_KEY')
+#     data = {
+#         'data': image,
+#         "caption_len": "long"
+#         }
     
-    description = requests.post('https://api.everypixel.com/v1/image_captioning', files=data, auth=(client_id, client_secret)).json()
-    return description
+#     description = requests.post('https://api.everypixel.com/v1/image_captioning', files=data, auth=(client_id, client_secret)).json()
+#     return description
+def image_description(image_file):
+    client_id = getattr(settings, 'CLIENT_ID', None)
+    client_secret = getattr(settings, 'CLIENT_SECRET', None)
+
+    # Convert PIL image to bytes
+    img_bytes = io.BytesIO()
+    image_file.save(img_bytes, format=image_file.format or "PNG")
+    img_bytes.seek(0)
+
+    files = {
+        'data': ('image.png', img_bytes, 'image/png')
+    }
+
+    data = {
+        "caption_len": "long"
+    }
+
+    response = requests.post(
+        'https://api.everypixel.com/v1/image_captioning',
+        files=files,
+        data=data,
+        auth=(client_id, client_secret)
+    )
+
+    return response.json()
+
+
 
 def _get_cohere_client_v2():
     api_key = getattr(settings, 'COHERE_API_KEY', None) or os.getenv('COHERE_API_KEY')

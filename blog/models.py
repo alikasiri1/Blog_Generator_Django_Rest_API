@@ -5,7 +5,8 @@ import uuid
 
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
-    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
     def __str__(self):
         return self.username
 
@@ -43,17 +44,11 @@ class Blog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug or Blog.objects.get(pk=self.pk).title != self.title:
-            slug = slugify(self.title)
-            if len(slug) > 1 :
-                pass
-            else:
-                slug = f"{uuid.uuid4().hex[:8]}"
-
-            # base_slug = f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}" #slugify(self.title) 
-            # slug = base_slug
+            base_slug = f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}" #slugify(self.title)
+            slug = base_slug
             counter = 1
             while Blog.objects.filter(slug=slug, admin=self.admin).exclude(pk=self.pk).exists():
-                slug = f"{slug}-{counter}"
+                slug = f"{base_slug}-{counter}"
                 counter += 1
             self.slug = slug
         super().save(*args, **kwargs)

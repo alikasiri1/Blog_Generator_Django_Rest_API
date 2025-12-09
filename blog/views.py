@@ -33,7 +33,7 @@ from urllib.parse import urlparse
 from bidi.algorithm import get_display
 from cloudinary.uploader import upload
 from django.http import StreamingHttpResponse
-
+import copy
 from rest_framework.decorators import  renderer_classes
 from rest_framework.renderers import BaseRenderer
 from rest_framework.renderers import JSONRenderer
@@ -348,7 +348,6 @@ class BlogViewSet(viewsets.ModelViewSet):
                 generated_blog = generate_blog(prompt=prompt ,docs= documents,topics=topics ,title=title,language=language ,image_count=1, video_count=0)
                 
             else: 
-                pass
                 generated_blog = generate_blog(prompt=prompt ,docs="" ,topics=topics ,title=title,language=language ,image_count=1, video_count=0)
 
 
@@ -393,29 +392,30 @@ class BlogViewSet(viewsets.ModelViewSet):
                     }
             for section in generated_blog['sections']:
                 subsection = {}
-                subsection['heading'] = section['section']
-                subsection['body'] = section['content']
-                subsection['media'] = media
+                subsection['heading'] = section['heading']
+                subsection['body'] = section['body']
+                subsection['media'] = copy.deepcopy(media)
 
                 content.append(subsection)
                 
                 
             try:
-                media["type"] = "image"
-                media["prompt"] = generated_blog['image_prompts'][0]
+                content[0]['media']["type"] = "image"
+                content[0]['media']["prompt"] = generated_blog['image_prompts'][0]
             except:
                 pass
                 
-            content[0]['media'] = media
+            # content[0]['media'] = media
             print(content)
             blog.content = content
             blog.title = title
-            slug = slugify(title)
+            # slug = slugify(title)
 
-            if len(slug) > 1 :
-                blog.slug = slug
-            else:
-                blog.slug = f"{uuid.uuid4().hex[:8]}"
+            # if len(slug) > 1 :
+            #     blog.slug = slug
+            # else:
+            #     blog.slug = f"{uuid.uuid4().hex[:8]}"
+            blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
             blog.save()
             
             return Response(BlogSerializer(blog).data)
@@ -472,10 +472,13 @@ class BlogViewSet(viewsets.ModelViewSet):
             if file.content_type.startswith("image/"):
                 # Image: OCR
                 image = Image.open(file)
-                # try:
-                #     extracted_text = image_description(image) + "Also document contains below text:\n"
-                # except:
-                #     return Response({'error': 'We can work on image description write know'}, status=status.HTTP_404_NOT_FOUND)
+                try:
+                    description = image_description(image) 
+                    if description['status'] == True :
+                        extracted_text = description['result']['caption'] + "Also document contains below text:\n"
+                except Exception as e:
+                    return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    # return Response({'error': 'We can work on image description write know'}, status=status.HTTP_404_NOT_FOUND)
                 extracted_text += pytesseract.image_to_string(image, lang='fas+eng') 
                 doc_type = 'IMG'
             elif file.content_type == "application/pdf":
