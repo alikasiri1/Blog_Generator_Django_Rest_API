@@ -14,43 +14,91 @@ from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
-class AdminViewSet(viewsets.ModelViewSet):
-    queryset = Admin.objects.all()
-    serializer_class = AdminSerializer
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
+# class AdminViewSet(viewsets.ModelViewSet):
+#     queryset = Admin.objects.all()
+#     serializer_class = AdminSerializer
+#     permission_classes = [IsAuthenticated]
+#     parser_classes = [MultiPartParser, FormParser, JSONParser]
+#     lookup_field = 'slug'          #  important
+#     lookup_url_kwarg = 'slug'      #  optional but recommended
+
+#     def get_permissions(self):
+#         if self.action in ['register', 'profile']:
+#             return [AllowAny()]
+#         return [IsAuthenticated()]
+
+#     def get_queryset(self):
+#         return Admin.objects.filter(user=self.request.user)
+
+#     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+#     def register(self, request):
+#         serializer = RegisterSerializer(data=request.data)
+#         if serializer.is_valid():
+#             admin = serializer.save()
+#             return Response(AdminSerializer(admin).data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+#     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+#     def profile(self, request, slug=None):
+#         admin = self.get_object()
+#         serializer = self.get_serializer(admin)
+#         return Response(serializer.data)
+
+#     @action(detail=False, methods=['patch']) 
+#     def updates(self, request):
+#         """
+#         PATCH /api/admins/profile/
+#         Updates the admin's profile and user fields.
+#         """
+#         admin = Admin.objects.get(user=request.user) 
+#         print(admin)
+#         serializer = self.get_serializer(admin, data=request.data, partial=True)
+
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminViewSet(viewsets.ModelViewSet):
+    serializer_class = AdminSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    lookup_field = 'work_domain'
+    lookup_url_kwarg = 'work_domain'
 
     def get_permissions(self):
-        if self.action == 'register':
+        if self.action in ['register', 'profile']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
+
     def get_queryset(self):
+        if self.action == 'profile':
+            return Admin.objects.all()
         return Admin.objects.filter(user=self.request.user)
+
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            admin = serializer.save()
-            return Response(AdminSerializer(admin).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['patch']) 
-    def updates(self, request):
-        """
-        PATCH /api/admins/profile/
-        Updates the admin's profile and user fields.
-        """
-        admin = Admin.objects.get(user=request.user) 
-        print(admin)
-        serializer = self.get_serializer(admin, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        admin = serializer.save()
+        return Response(AdminSerializer(admin).data, status=status.HTTP_201_CREATED)
 
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    @action(detail=True, methods=['get'])
+    def profile(self, request, work_domain=None):
+        admin = self.get_object()
+        serializer = self.get_serializer(admin)
+        return Response(serializer.data)
+
+
+    @action(detail=False, methods=['patch'])
+    def updates(self, request):
+        admin = Admin.objects.get(user=request.user)
+        serializer = self.get_serializer(admin, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 # class CommentViewSet(viewsets.ModelViewSet):
