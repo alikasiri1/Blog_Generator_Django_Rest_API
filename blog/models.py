@@ -29,6 +29,10 @@ class Blog(models.Model):
         ('published', 'Published'),
     ]
 
+    BLOG_TYPE_CHOICES = [
+        ('slide', 'Slide'),
+        ('webpage', 'Webpage'),
+    ]
     admin = models.ForeignKey(Admin, on_delete=models.CASCADE, related_name='blogs', null = True , blank = True)
     title = models.CharField(max_length=200)
     content = models.JSONField(null=True, blank=True)  # ✅ JSON instead of plain text
@@ -37,6 +41,7 @@ class Blog(models.Model):
     image_url = models.URLField(max_length=500, null=True, blank=True) 
     # temp_media_file = models.FileField(upload_to="blog_media/",null=True,blank=True)
     # image = models.ImageField(upload_to='blog_images/', null=True, blank=True)  
+    blog_type = models.CharField(max_length=10, choices=BLOG_TYPE_CHOICES, default='slide')  # ← added
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -555,74 +555,189 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
     )
 
     # Extract JSON content defensively
-    data = None
-    try:
-        content_obj = getattr(res, "message", None)
-        if content_obj and getattr(content_obj, "content", None):
-            blocks = content_obj.content
-            if blocks and len(blocks) > 0 and hasattr(blocks[0], "text"):
-                data = json.loads(blocks[0].text)
-        if data is None:
-            raw = getattr(res, "text", None) or getattr(res, "output_text", None) or str(res)
-            data = json.loads(raw)
-    except Exception:
-        if isinstance(res, dict):
-            data = res
-        else:
-            raise
+    # data = None
+    # try:
+    #     content_obj = getattr(res, "message", None)
+    #     if content_obj and getattr(content_obj, "content", None):
+    #         blocks = content_obj.content
+    #         if blocks and len(blocks) > 0 and hasattr(blocks[0], "text"):
+    #             data = json.loads(blocks[0].text)
+    #     if data is None:
+    #         raw = getattr(res, "text", None) or getattr(res, "output_text", None) or str(res)
+    #         data = json.loads(raw)
+    # except Exception:
+    #     if isinstance(res, dict):
+    #         data = res
+    #     else:
+    #         raise
 
-    if not isinstance(data, dict):
-        data = {"sections": [], "image_prompts": [], "video_prompts": []}
+    # if not isinstance(data, dict):
+    #     data = {"sections": [], "image_prompts": [], "video_prompts": []}
 
-    # Normalize fields
-    sections = data.get("sections", [])
-    if not isinstance(sections, list):
-        sections = []
-    
-    # Ensure each section has required fields
+    # ✅ OFFICIAL WAY (based on Cohere docs)
+    content_blocks = res.message.content
+    if not content_blocks:
+        raise ValueError("Empty response from Cohere")
+
+    raw = content_blocks[0].text
+
+    if isinstance(raw, dict):
+        data = raw
+    elif isinstance(raw, str):
+        data = json.loads(raw)
+    else:
+        raise ValueError("Unexpected Cohere response type")
+
+    # ---------------- Normalize ----------------
+
     normalized_sections = []
-    for sec in sections:
+    for sec in data.get("sections", []):
         if isinstance(sec, dict):
             normalized_sections.append({
-                "heading": sec.get("section", "") or "",
-                "body": sec.get("content", "") or "",
+                "heading": sec.get("section", ""),
+                "body": sec.get("content", ""),
                 "media": {
-                    "type":"",
-                    "prompt":"",
-                    "url":""
-                }
+                    "type": "",
+                    "prompt": "",
+                    "url": "",
+                },
             })
-    
+
     image_prompts = data.get("image_prompts", [])
     if not isinstance(image_prompts, list):
         image_prompts = []
-    image_prompts = [str(p) for p in image_prompts if p]
-    
+
     video_prompts = data.get("video_prompts", [])
     if not isinstance(video_prompts, list):
         video_prompts = []
-    video_prompts = [str(p) for p in video_prompts if p]
-    
-    # Enforce expected counts
-    if image_count > 0:
-        # Pad or truncate to match requested count
-        if len(image_prompts) < image_count:
-            image_prompts.extend([""] * (image_count - len(image_prompts)))
-        elif len(image_prompts) > image_count:
-            image_prompts = image_prompts[:image_count]
-    else:
-        image_prompts = []
-    
-    if video_count > 0:
-        if len(video_prompts) < video_count:
-            video_prompts.extend([""] * (video_count - len(video_prompts)))
-        elif len(video_prompts) > video_count:
-            video_prompts = video_prompts[:video_count]
-    else:
-        video_prompts = []
+
+    # enforce counts
+    image_prompts = image_prompts[:image_count] if image_count > 0 else []
+    video_prompts = video_prompts[:video_count] if video_count > 0 else []
 
     return {
         "sections": normalized_sections,
         "image_prompts": image_prompts,
         "video_prompts": video_prompts,
     }
+    # Normalize fields
+    # sections = data.get("sections", [])
+    # if not isinstance(sections, list):
+    #     sections = []
+    
+    # # Ensure each section has required fields
+    # normalized_sections = []
+    # for sec in sections:
+    #     if isinstance(sec, dict):
+    #         normalized_sections.append({
+    #             "heading": sec.get("section", "") or "",
+    #             "body": sec.get("content", "") or "",
+    #             "media": {
+    #                 "type":"",
+    #                 "prompt":"",
+    #                 "url":""
+    #             }
+    #         })
+    
+    # image_prompts = data.get("image_prompts", [])
+    # if not isinstance(image_prompts, list):
+    #     image_prompts = []
+    # image_prompts = [str(p) for p in image_prompts if p]
+    
+    # video_prompts = data.get("video_prompts", [])
+    # if not isinstance(video_prompts, list):
+    #     video_prompts = []
+    # video_prompts = [str(p) for p in video_prompts if p]
+    
+    # # Enforce expected counts
+    # if image_count > 0:
+    #     # Pad or truncate to match requested count
+    #     if len(image_prompts) < image_count:
+    #         image_prompts.extend([""] * (image_count - len(image_prompts)))
+    #     elif len(image_prompts) > image_count:
+    #         image_prompts = image_prompts[:image_count]
+    # else:
+    #     image_prompts = []
+    
+    # if video_count > 0:
+    #     if len(video_prompts) < video_count:
+    #         video_prompts.extend([""] * (video_count - len(video_prompts)))
+    #     elif len(video_prompts) > video_count:
+    #         video_prompts = video_prompts[:video_count]
+    # else:
+    #     video_prompts = []
+
+    # return {
+    #     "sections": normalized_sections,
+    #     "image_prompts": image_prompts,
+    #     "video_prompts": video_prompts,
+    # }
+
+
+
+def _build_messages_for_Continuousـblog(prompt: str,docs: str,language: str = "English",):
+    system_message = (
+    "You are a professional long-form blog writer.\n"
+    "You write cohesive, narrative-driven articles with depth.\n"
+    f"All prose must be written in {language or 'English'}.\n\n"
+
+    "STRICT OUTPUT RULES:\n"
+    "- Output must be valid Markdown only.\n"
+    "- Write ONE fully integrated blog article.\n"
+    "- Do NOT include citations, references, or source links.\n"
+    "- Do NOT mention reports, studies, or external sources.\n"
+    "- Do NOT add explanations outside the blog.\n\n"
+
+    'CONTENT DEPTH REQUIREMENTS:\n'
+    "- The article must be at least 1200 words.\n"
+    "- Each main section must contain AT LEAST 3 paragraphs.\n"
+    "- Each paragraph must contain 4–6 complete sentences.\n"
+    "- Each paragraph must introduce new information or analysis.\n"
+    "- Avoid repetition across paragraphs.\n\n"
+
+    "STRUCTURE RULES:\n"
+    "- Use a clear introduction and conclusion.\n"
+    "- Use Markdown headings (##) for main sections.\n"
+    "- Ensure smooth transitions between sections.\n\n"
+
+    "IMAGE PROMPT RULES:\n"
+    "- Images are OPTIONAL and should be used only when they improve clarity or engagement.\n"
+    "- Do NOT include real image URLs.\n"
+    "- When adding an image, use Markdown image syntax with the placeholder URL: example.url\n"
+    "- The image generation prompt MUST be placed inside the image alt text.\n"
+    "- The alt text must be a detailed, visual prompt suitable for an AI image generator.\n"
+    "- Format exactly like this:\n"
+    "  ![IMAGE_PROMPT: detailed image generation prompt](example.url)\n"
+    "- Include at most ONE image per main section.\n"
+    "- The blog must contain AT LEAST TWO images in total.\n"
+    "- The FIRST image must appear IMMEDIATELY after the blog title (on the next line after the title) before any text content.\n"
+    )
+
+
+
+    user_parts = []
+
+
+    if prompt:
+        user_parts.append(f"Overall blog prompt:\n{prompt}")
+
+    if docs:
+        user_parts.append(f"Reference material:\n{docs}")
+
+
+    user_message = "\n\n".join(user_parts)
+
+    return [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+
+def generate_webpage( prompt: str, docs: str, language: str = "English", ):
+    messages = _build_messages_for_Continuousـblog(prompt=prompt,docs=docs,language=language,)
+    co = _get_cohere_client_v2()
+    response = co.chat(
+    model="command-r-08-2024",
+    messages=messages,
+    )
+
+    return response.message.content[0].text
