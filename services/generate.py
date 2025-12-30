@@ -1,3 +1,4 @@
+from socket import timeout
 import cohere
 import json
 from django.conf import settings
@@ -5,6 +6,7 @@ import os
 import requests
 import time
 import io
+from openai import OpenAI
 
 class FourOImageAPI: 
     def __init__(self):
@@ -675,7 +677,7 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
 
 
 
-def _build_messages_for_Continuousـblog(prompt: str,docs: str,language: str = "English",):
+def _build_messages_for_webpageـblog(prompt: str,docs: str,language: str = "English",):
     system_message = (
     "You are a professional long-form blog writer.\n"
     "You write cohesive, narrative-driven articles with depth.\n"
@@ -732,12 +734,24 @@ def _build_messages_for_Continuousـblog(prompt: str,docs: str,language: str = "
         {"role": "user", "content": user_message},
     ]
 
+# def generate_webpage( prompt: str, docs: str, language: str = "English", ):
+#     messages = _build_messages_for_webpageـblog(prompt=prompt,docs=docs,language=language,)
+#     co = _get_cohere_client_v2()
+#     response = co.chat(
+#     model="command-r-08-2024",
+#     messages=messages,timeout=300
+#     )
+
+#     return response.message.content[0].text
+ 
 def generate_webpage( prompt: str, docs: str, language: str = "English", ):
-    messages = _build_messages_for_Continuousـblog(prompt=prompt,docs=docs,language=language,)
-    co = _get_cohere_client_v2()
-    response = co.chat(
-    model="command-r-08-2024",
-    messages=messages,
+    messages = _build_messages_for_webpageـblog(prompt=prompt,docs=docs,language=language,)
+    metis_api_key = getattr(settings, 'METIS_API', None)
+    client = OpenAI(api_key = metis_api_key, base_url="https://api.metisai.ir/openai/v1")
+    response = client.responses.create(
+        model="gpt-4o-mini",
+        # tools=[{"type": "web_search_preview"}],
+        input=messages 
     )
 
-    return response.message.content[0].text
+    return response.output_text

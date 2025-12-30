@@ -48,8 +48,8 @@ class Blog(models.Model):
     published_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.slug or Blog.objects.get(pk=self.pk).title != self.title:
-            base_slug = f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}" #slugify(self.title)
+        if not self.slug: #or Blog.objects.get(pk=self.pk).title != self.title:
+            base_slug = f"{uuid.uuid4().hex[:8]}" #slugify(self.title) # f"{slugify(self.title)}-{uuid.uuid4().hex[:8]}"
             slug = base_slug
             counter = 1
             while Blog.objects.filter(slug=slug, admin=self.admin).exclude(pk=self.pk).exists():

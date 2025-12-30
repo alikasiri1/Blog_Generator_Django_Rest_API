@@ -27,7 +27,7 @@ KIE_API_KEY = os.environ['KIE_API_KEY'] # image generation
 
 CLIENT_ID = os.environ['CLIENT_ID'] # image description
 CLIENT_SECRET = os.environ['CLIENT_SECRET']# image description
-
+METIS_API = os.environ['METIS_API']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    "django_q",
     # Third party apps
     'rest_framework',
     'corsheaders',
@@ -52,6 +53,16 @@ INSTALLED_APPS = [
     'cloudinary',
     'cloudinary_storage',
 ]
+
+Q_CLUSTER = {
+    "name": "DjangoQ",
+    "workers": 4,
+    "retry": 120,
+    "timeout": 600,
+    "queue_limit": 50,
+    "bulk": 10,
+    "orm": "default",
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
