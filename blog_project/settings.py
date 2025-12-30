@@ -161,6 +161,12 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://royal-winona-alikasiri-750a74c5.koyeb.app",
+    "https://*.koyeb.app",
+    "https://blog-generator-django-rest-api.onrender.com"
+]
+
 # OpenAI settings
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 
