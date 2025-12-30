@@ -153,7 +153,12 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Only for development
+# CORS_ALLOW_ALL_ORIGINS = True  # Only for development
+CORS_ALLOWED_ORIGINS = [
+    "https://royal-winona-alikasiri-750a74c5.koyeb.app",
+    "https://bloggeneratorai.pythonanywhere.com",
+    "https://blog-generator-django-rest-api.onrender.com"
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # OpenAI settings
