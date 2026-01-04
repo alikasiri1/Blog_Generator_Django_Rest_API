@@ -110,8 +110,8 @@ DATABASES = {
         'NAME': 'postgres',   # Database
         'USER': 'postgres',   # Username
         'PASSWORD': os.environ['DB_PASSWORD'], 
-        'HOST': 'bloggenerator-proxy.genx-productassist-blag-generator.svc',
-        'PORT': '5432',
+        'HOST': 'b35089b1-2e59-404c-b37d-83ac8cc7d968.hadb.ir',
+        'PORT': '26229',
     }
 }
 
