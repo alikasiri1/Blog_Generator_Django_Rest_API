@@ -17,3 +17,4 @@ python-bidi==0.4.2
 markdown==3.6
 requests>=2.31.0
 setuptools>=68.0.0
+psycopg[binary]

@@ -98,10 +98,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'blog_project.wsgi.application'
 
 # Database
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',   # Database
+        'USER': 'postgres',   # Username
+        'PASSWORD': os.environ['DB_PASSWORD'], 
+        'HOST': 'bloggenerator-proxy.genx-productassist-blag-generator.svc',
+        'PORT': '5432',
     }
 }
 
@@ -157,7 +167,9 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "https://royal-winona-alikasiri-750a74c5.koyeb.app",
     "https://bloggeneratorai.pythonanywhere.com",
-    "https://blog-generator-django-rest-api.onrender.com"
+    "https://blog-generator-django-rest-api.onrender.com",
+    "http://localhost:8004",
+    "http://127.0.0.1:8004",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
