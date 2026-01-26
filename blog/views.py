@@ -23,7 +23,7 @@ import pytesseract     # for OCR text extraction
 import pdfplumber
 from docx import Document as DocxDocument
 from services.embeddings import   count_tokens, truncate_by_tokens , split_text_into_chunks #splitter,
-from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description, FourOImageAPI , RunwayAPI, generate_webpage
+from services.generate import summarize_chunk,generate_blog, generate_card_topics, image_description, FourOImageAPI , RunwayAPI, generate_webpage,_build_messages_for_webpageـblog,summarize_document
 # from services.image_generator import Image_generator
 import requests
 import asyncio
@@ -40,6 +40,8 @@ from rest_framework.renderers import JSONRenderer
 import markdown
 import re
 from django_q.tasks import async_task
+from openai import OpenAI
+from django.conf import settings
 
 class SSERenderer(BaseRenderer):
     media_type = 'text/event-stream'
@@ -236,7 +238,7 @@ class BlogViewSet(viewsets.ModelViewSet):
             serializer = BlogSerializer(data=blog_data, context={'request': request})
             if serializer.is_valid():
                 blog = serializer.save()
-                blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'}
+                blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze', 'user_prompt':prompt}
                 blog.blog_type = 'slide'
                 blog.save()
                 # Attach documents specified in request
@@ -437,6 +439,113 @@ class BlogViewSet(viewsets.ModelViewSet):
             )
         
 
+    @action(detail=False, methods=['post'])
+    def generate_webpage_content(self, request):
+        try:
+            # blog = self.get_object()
+            prompt = request.data.get('prompt')
+            language = request.data.get('language')
+            temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
+            # admin = Admin.objects.get(user=self.request.user)
+            print(request.data)
+            # time.sleep(5)
+
+            if not prompt:
+                return Response(
+                    {'error': 'prompt is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Delete all other temporary documents of this admin that were not selected
+            other_docs = DocumentContent.objects.filter(
+                is_temporary=True,
+                blog__isnull=True,
+                user=request.user
+            ).exclude(uuid__in=temp_doc_ids)
+            deleted_count, _ = other_docs.delete()  
+            
+
+            
+            blog_data = {
+                'title': "Generating...",
+                'blog_type': 'webpage',
+                'settings':{'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze', 'user_prompt':prompt},
+            }
+            
+            # Use your serializer to create the blog
+            serializer = BlogSerializer(data=blog_data, context={'request': request})
+            if serializer.is_valid():
+                blog = serializer.save()
+                
+                documents = ""
+                for doc_id in temp_doc_ids:
+                    try:
+                        doc_text = ""
+                        doc = DocumentContent.objects.get(uuid=doc_id , is_temporary=True)
+                        # print(doc.type)
+                        # if doc.type == 'IMG':
+                        #     doc_text = doc.text_content
+                            
+                        #     # doc.save()
+                        # else:
+                        # #     chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
+                        # #     if len(chunks) < 2:
+                        # #         doc_text = doc.text_content
+                        # #     else:
+                        # #         if count_tokens(chunks[-1]) < 10000:
+                        # #             chunks[-2] += " " + chunks[-1]
+                        # #             chunks.pop(-1)
+                                
+                        # #         summaries = []
+                        # #         for i, chunk in enumerate(chunks):
+                        # #             print(f"⏳ Summarizing chunk {i+1}/{len(chunks)} ...")
+                        # #             try:
+                        # #                 summary = summarize_chunk(chunk)
+                        # #                 summaries.append(summary)
+                        # #                 doc_text += summary['summarizes_text'] + "\n"
+                        # #             except Exception as e:
+                        # #                 print(f"❌ Error summarizing chunk {i+1}: {e}")
+
+                        # #         print("✅ All chunks summarized successfully")
+                        # #         doc.summaries = summaries
+                        # #         doc.save()
+                        #     doc_text = doc.text_content
+                        # # documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
+                        doc.mark_as_attached(blog)
+
+                    except DocumentContent.DoesNotExist:
+                        continue
+                # documents = truncate_by_tokens(documents ,90000 ,count_tokens(documents))
+                # print(documents)
+
+                
+                
+                # async_task(
+                #     "blog.tasks.generate_webpage_task",
+                #     prompt,
+                #     documents,
+                #     language,
+                #     admin.webpage_prompt,
+                #     blog.id
+                # ) 
+                
+                 
+                return Response(BlogSerializer(blog).data)
+
+            else:
+                return JsonResponse({
+                    'error': 'Failed to create blog',
+                    'details': serializer.errors,
+                    'status': 'failed'
+                }, status=400)
+            
+        except Exception as e:
+            print(str(e))
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     # @action(detail=False, methods=['post'])
     # def generate_webpage_content(self, request):
     #     try:
@@ -459,7 +568,7 @@ class BlogViewSet(viewsets.ModelViewSet):
     #             blog__isnull=True,
     #             user=request.user
     #         ).exclude(uuid__in=temp_doc_ids)
-    #         deleted_count, _ = other_docs.delete()  
+    #         deleted_count, _ = other_docs.delete()
             
 
     #         # blog = Blog.objects.create(
@@ -467,116 +576,143 @@ class BlogViewSet(viewsets.ModelViewSet):
     #         #     blog_type="webpage",
     #         #     admin=request.user
     #         # )
-    #         blog_data = {
-    #             'title': "Generating...",
-    #             'blog_type': 'webpage',
-    #             'settings':{'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'},
-    #         }
-            
-    #         # Use your serializer to create the blog
-    #         serializer = BlogSerializer(data=blog_data, context={'request': request})
-    #         if serializer.is_valid():
-    #             blog = serializer.save()
-                
-    #             documents = ""
-    #             for doc_id in temp_doc_ids:
-    #                 try:
-    #                     doc_text = ""
-    #                     doc = DocumentContent.objects.get(uuid=doc_id , is_temporary=True)
-    #                     print(doc.type)
-    #                     if doc.type == 'IMG':
-    #                         doc_text = doc.text_content
-                            
-    #                         # doc.save()
-    #                     else:
-    #                     #     chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
-    #                     #     if len(chunks) < 2:
-    #                     #         doc_text = doc.text_content
-    #                     #     else:
-    #                     #         if count_tokens(chunks[-1]) < 10000:
-    #                     #             chunks[-2] += " " + chunks[-1]
-    #                     #             chunks.pop(-1)
-                                
-    #                     #         summaries = []
-    #                     #         for i, chunk in enumerate(chunks):
-    #                     #             print(f"⏳ Summarizing chunk {i+1}/{len(chunks)} ...")
-    #                     #             try:
-    #                     #                 summary = summarize_chunk(chunk)
-    #                     #                 summaries.append(summary)
-    #                     #                 doc_text += summary['summarizes_text'] + "\n"
-    #                     #             except Exception as e:
-    #                     #                 print(f"❌ Error summarizing chunk {i+1}: {e}")
-
-    #                     #         print("✅ All chunks summarized successfully")
-    #                     #         doc.summaries = summaries
-    #                     #         doc.save()
-    #                         doc_text = doc.text_content
-    #                     documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
-                            
-    #                 except DocumentContent.DoesNotExist:
-    #                     continue
-    #             documents = truncate_by_tokens(documents ,90000 ,count_tokens(documents))
-    #             print(documents)
-
-    #             # generated_blog = generate_webpage(prompt=prompt ,docs= documents,language=language)
-                
-    #             async_task(
-    #                 "blog.tasks.generate_webpage_task",
-    #                 prompt,
-    #                 documents,
-    #                 language,
-    #                 blog.id
-    #             ) 
-    #             # blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
-    #             # blog.save()
-                 
-    #             return Response(BlogSerializer(blog).data)
-
-    #         else:
-    #             return JsonResponse({
-    #                 'error': 'Failed to create blog',
-    #                 'details': serializer.errors,
-    #                 'status': 'failed'
-    #             }, status=400)
-    #         # generated_blog = '## روندهای انرژی تجدیدپذیر در سال 2025\n\nانرژی\u200cهای تجدیدپذیر طی سال\u200cهای اخیر به یک محور اصلی در سیاست\u200cهای جهانی و توسعه پایدار تبدیل شده\u200cاند. با پیشرفت\u200cهای تکنولوژیکی، تغییرات جوی و فشارهای اقتصادی، جهان به سوی استفاده از منابع انرژی پاک\u200cتر و پایدارتر روی آورده است. در سال 2025، انتظار می\u200cرود که این روندها به شکل قابل توجهی تغییر کنند و نوآوری\u200cهایی در زمینه انرژی به وجود آید که نه تنها بر روی سیاست\u200cهای ملی تأثیر بگذارد بلکه بر روی سبک زندگی روزمره انسان\u200cها نیز تأثیرگذار باشد.\n\nتکنولوژی\u200cهای جدید بر پایه انرژی\u200cهای تجدیدپذیر به ما این امکان را می\u200cدهند که از منابعی چون خورشید، باد، آب و بیوماس استفاده بیشتری کنیم. در این راستا، پیشرفت\u200cها در زمینه ذخیره\u200cسازی انرژی و کارایی سیستم\u200cها به ما کمک خواهد کرد تا بتوانیم از این منابع به شکل مؤثرتری استفاده کنیم. با استفاده از انرژی تجدیدپذیر، جامعه\u200cای با انتشار کربن کمتر و محیط زیست پاک\u200cتر ساخته می\u200cشود.\n\nپیش\u200cبینی می\u200cشود که در سال 2025، انرژی خورشیدی و بادی به عنوان دو منبع اصلی انرژی تجدیدپذیر در بسیاری از کشورها شناخته شوند. این دو منبع قادر به تأمین بخش عمده\u200cای از نیازهای انرژی کشورهای پیشرفته و در حال توسعه خواهند بود و بدین ترتیب، همچنین موجب بهبود امنیت انرژی و کاهش وابستگی به سوخت\u200cهای فسیلی خواهند شد.\n\n![IMAGE_PROMPT: a futuristic solar panel farm with advanced technology, showcasing solar panels that track the sun and innovative wind turbines in the background](example.url)\n\n## پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها\n\nیکی از عوامل کلیدی در رشد انرژی\u200cهای تجدیدپذیر در سال 2025، پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها خواهد بود. با توسعه فناوری\u200cهای نوین مانند پنل\u200cهای خورشیدی با کارایی بالا و توربین\u200cهای بادی قوی\u200cتر، امکان تولید انرژی با هزینه\u200cهای کمتر فراهم خواهد شد. این پیشرفت\u200cها به ویژه در کشورهای در حال توسعه که به شدت به منابع انرژی جدید نیاز دارند، حائز اهمیت است.\n\nکاهش هزینه\u200cهای تولید و نصب پنل\u200cهای خورشیدی و تجهیزات بادی تنها یکی از جنبه\u200cهای این تحولات است. به عنوان مثال، بسیاری از شرکت\u200cها به بهینه\u200cسازی زنجیره تأمین خود پرداخته\u200cاند تا هزینه تمام\u200cشده تولید را به حداقل برسانند. در نتیجه، با کاهش هزینه، دسترسی به انرژی\u200cهای تجدیدپذیر برای عموم مردم آسان\u200cتر خواهد شد. این روند می\u200cتواند تأثیر زیادی بر پذیرش این نوع انرژی در سطح جامعه داشته باشد.\n\nدیگر جنبه مهم فناوری، بهبود روش\u200cهای ذخیره\u200cسازی انرژی است. با توسعه باتری\u200cهای کارآمدتر و سیستم\u200cهای ذخیره\u200cسازی بزرگ مقیاس، امکان استفاده از انرژی\u200cهای تجدیدپذیر به عنوان منبع اصلی تأمین انرژی فراهم می\u200cشود. به این ترتیب، نوسانات انرژی که به دلیل عدم ثبات در تولید منابع تجدیدپذیر به وجود می\u200cآید، به راحتی مدیریت خواهد شد و وابستگی به سوخت\u200cهای فسیلی به شدت کاهش می\u200cیابد.\n\n## پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر\n\nیکی دیگر از روندهای قابل توجه در سال 2025، پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر در صنایع و کسب\u200cوکارها خواهد بود. با توجه به فشارهای اجتماعی و اقتصادی برای کاهش انتشار کربن، شرکت\u200cها به سرعت به سمت استفاده از منابع انرژی پاک\u200cتر حرکت می\u200cکنند. این تغییرات نه تنها به آن\u200cها کمک می\u200cکند تا در راستای مسئولیت اجتماعی خود قدم بردارند بلکه همچنین می\u200cتواند هزینه\u200cها را کاهش دهد و مزیت\u200cهای رقابتی ایجاد کند.\n\nعلاوه بر این، بسیاری از صنایع به سمت عرضه انرژی\u200cهای تجدیدپذیر در محصولات و خدمات خود گام بر می\u200cدارند. به عنوان مثال، تولید خودروهای الکتریکی با استفاده از پنل\u200cهای خورشیدی برای شارژ و سیستم\u200cهای مدیریت هوشمند انرژی، روز به روز در حال گسترش است. این امر منجر به پیدایش نوآوری\u200cهای جدید و افزایش تقاضا برای انرژی\u200cهای پاک\u200cتر خواهد شد.\n\nسرمایه\u200cگذاری در زیرساخت\u200cهای انرژی تجدیدپذیر نیز در حال افزایش است. دولت\u200cها و نهادهای خصوصی به دنبال تأمین مالی پروژه\u200cهای انرژی پاک هستند تا به اهداف کاهش انتشار کربن و ایجاد محیط زیست سالم\u200cتر دست یابند. این روند به شکل\u200cگیری شبکه\u200cهای انرژی محلی و پایدار کمک می\u200cکند که می\u200cتواند به توسعه جوامع محلی و کاهش نابرابری\u200cهای اقتصادی منجر شود.\n\n![IMAGE_PROMPT: advanced renewable energy technology being adopted in an urban setting, showing electric vehicles charging at solar stations and buildings with green roofs](example.url)\n\n## چالش\u200cها و فرصت\u200cها\n\nاگرچه چشم\u200cانداز انرژی تجدیدپذیر در سال 2025 روشن به نظر می\u200cرسد، اما چالش\u200cهایی نیز وجود دارد که باید به آن\u200cها توجه شود. یکی از بزرگ\u200cترین چالش\u200cها، نیاز به اصلاحات قانونی و سیاست\u200cگذاری\u200cهای پایدار است. بسیاری از کشورها هنوز برای پذیرش انرژی\u200cهای تجدیدپذیر به اصلاحات اساسی نیاز دارند تا موانع موجود را برطرف کنند. همچنین، تغییر در رفتار مصرف\u200cکنندگان و عادت\u200cهای اجتماعی برای پذیرش این نوع انرژی لازم است.\n\nعلاوه بر این، تأمین مالی پروژه\u200cهای انرژی تجدیدپذیر در مناطق مختلف جهان یک چالش عمده به شمار می\u200cآید. کشورهای در حال توسعه به دلیل محدودیت\u200cهای مالی و دسترسی به منابع، ممکن است نتوانند به\u200cطور مؤثری از انرژی\u200cهای تجدیدپذیر بهره\u200cبرداری کنند. در این راستا، همکاری\u200cهای بین\u200cالمللی و ایجاد مدل\u200cهای مالی جدید می\u200cتواند به حل این مشکل کمک کند و به آنها ابتکار عمل در توسعه پایدار را بدهد.\n\nدر نهایت، چالش دیگری که باید به آن توجه شود، حفاظت از محیط زیست در هنگام استفاده از منابع تجدیدپذیر است. به عنوان مثال، پیاده\u200cسازی پروژه\u200cهای بزرگ بادی و خورشیدی ممکن است به اکوسیستم\u200cهای محلی آسیب برساند. بنابراین، در کنار خروج از سوخت\u200cهای فسیلی، ضروری است که رویکردی چندجانبه برای محافظت از منابع طبیعی و تنوع زیستی در پیش گرفته شود.\n\n## نتیجه\u200cگیری\n\nروندهای انرژی تجدیدپذیر در سال 2025 به شکل قابل توجهی منجر به تغییر شیوه تأمین انرژی در جهان خواهند شد. پیشرفت\u200cهای فناوری، پذیرش گسترده\u200cتر و سرمایه\u200cگذاری در زیرساخت\u200cها از جمله عواملی هستند که می\u200cتوانند نسل جدیدی از انرژی\u200cهای پاک و پایدار را به وجود آورند. در عین حال، اطمینان از توسعه پایدار و محافظت از محیط زیست از جمله چالش\u200cهایی است که باید بر آن فائق آمد.\n\nدر نهایت، انرژی\u200cهای تجدیدپذیر نه تنها به کاهش انتشار کربن و ایجاد جهانی پاک\u200cتر کمک می\u200cکنند بلکه می\u200cتوانند به ایجاد فرصت\u200cهای جدید شغلی و بهبود کیفیت زندگی در سراسر جهان بینجامند. با توجه به چالش\u200cها و فرصت\u200cها، آینده انرژی\u200cهای تجدیدپذیر بسیار امیدوارکننده به نظر می\u200cرسد و تمامی جوانب زندگی بشر را تحت تأثیر قرار خواهد داد.'
-            
-            
-            
-            
-    #         # image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
-    #         # print(content)
-            
-            
     #         # blog_data = {
-    #         #     'title': generated_blog.split('\n')[0].replace('#' , '').strip(),  # Using response as title
-    #         #     'image_url': image_url,
-    #         #     'content': content,
+    #         #     'title': "Generating...",
+    #         #     'blog_type': 'webpage',
+    #         #     'settings':{'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'},
     #         # }
             
     #         # # Use your serializer to create the blog
     #         # serializer = BlogSerializer(data=blog_data, context={'request': request})
     #         # if serializer.is_valid():
-    #         #     blog = serializer.save()
-    #         #     blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'}
-    #         #     blog.blog_type = 'webpage'
-    #         #     blog.save()
-    #         #     # Attach documents specified in request
-    #         #     attached_count = 0
-    #         #     for doc_id in temp_doc_ids:
-    #         #         try:
-    #         #             doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
-    #         #             doc.mark_as_attached(blog)
-    #         #             attached_count += 1
-    #         #         except DocumentContent.DoesNotExist:
-    #         #             continue
+    #             # blog = serializer.save()
+                
+    #         documents = ""
+    #         for doc_id in temp_doc_ids:
+    #             try:
+    #                 doc_text = ""
+    #                 doc = DocumentContent.objects.get(uuid=doc_id , is_temporary=True)
+    #                 print(doc.type)
+    #                 if doc.type == 'IMG':
+    #                     doc_text = doc.text_content
+                        
+    #                     # doc.save()
+    #                 else:
+    #                 #     chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
+    #                 #     if len(chunks) < 2:
+    #                 #         doc_text = doc.text_content
+    #                 #     else:
+    #                 #         if count_tokens(chunks[-1]) < 10000:
+    #                 #             chunks[-2] += " " + chunks[-1]
+    #                 #             chunks.pop(-1)
+                            
+    #                 #         summaries = []
+    #                 #         for i, chunk in enumerate(chunks):
+    #                 #             print(f"⏳ Summarizing chunk {i+1}/{len(chunks)} ...")
+    #                 #             try:
+    #                 #                 summary = summarize_chunk(chunk)
+    #                 #                 summaries.append(summary)
+    #                 #                 doc_text += summary['summarizes_text'] + "\n"
+    #                 #             except Exception as e:
+    #                 #                 print(f"❌ Error summarizing chunk {i+1}: {e}")
 
-    #         #     return Response(BlogSerializer(blog).data)
+    #                 #         print("✅ All chunks summarized successfully")
+    #                 #         doc.summaries = summaries
+    #                 #         doc.save()
+    #                     doc_text = doc.text_content
+    #                 documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
+                        
+    #             except DocumentContent.DoesNotExist:
+    #                 continue
+    #         documents = truncate_by_tokens(documents ,90000 ,count_tokens(documents))
+    #         print(documents)
+
+    #         generated_blog = generate_webpage(prompt=prompt ,docs= documents,language=language)
+            
+    #             # async_task(
+    #             #     "blog.tasks.generate_webpage_task",
+    #             #     prompt,
+    #             #     documents,
+    #             #     language,
+    #             #     blog.id
+    #             # ) 
+    #             # # blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
+    #             # # blog.save()
+                 
+    #             # return Response(BlogSerializer(blog).data)
+
     #         # else:
     #         #     return JsonResponse({
     #         #         'error': 'Failed to create blog',
     #         #         'details': serializer.errors,
     #         #         'status': 'failed'
     #         #     }, status=400)
+    #         # generated_blog = '## روندهای انرژی تجدیدپذیر در سال 2025\n\nانرژی\u200cهای تجدیدپذیر طی سال\u200cهای اخیر به یک محور اصلی در سیاست\u200cهای جهانی و توسعه پایدار تبدیل شده\u200cاند. با پیشرفت\u200cهای تکنولوژیکی، تغییرات جوی و فشارهای اقتصادی، جهان به سوی استفاده از منابع انرژی پاک\u200cتر و پایدارتر روی آورده است. در سال 2025، انتظار می\u200cرود که این روندها به شکل قابل توجهی تغییر کنند و نوآوری\u200cهایی در زمینه انرژی به وجود آید که نه تنها بر روی سیاست\u200cهای ملی تأثیر بگذارد بلکه بر روی سبک زندگی روزمره انسان\u200cها نیز تأثیرگذار باشد.\n\nتکنولوژی\u200cهای جدید بر پایه انرژی\u200cهای تجدیدپذیر به ما این امکان را می\u200cدهند که از منابعی چون خورشید، باد، آب و بیوماس استفاده بیشتری کنیم. در این راستا، پیشرفت\u200cها در زمینه ذخیره\u200cسازی انرژی و کارایی سیستم\u200cها به ما کمک خواهد کرد تا بتوانیم از این منابع به شکل مؤثرتری استفاده کنیم. با استفاده از انرژی تجدیدپذیر، جامعه\u200cای با انتشار کربن کمتر و محیط زیست پاک\u200cتر ساخته می\u200cشود.\n\nپیش\u200cبینی می\u200cشود که در سال 2025، انرژی خورشیدی و بادی به عنوان دو منبع اصلی انرژی تجدیدپذیر در بسیاری از کشورها شناخته شوند. این دو منبع قادر به تأمین بخش عمده\u200cای از نیازهای انرژی کشورهای پیشرفته و در حال توسعه خواهند بود و بدین ترتیب، همچنین موجب بهبود امنیت انرژی و کاهش وابستگی به سوخت\u200cهای فسیلی خواهند شد.\n\n![IMAGE_PROMPT: a futuristic solar panel farm with advanced technology, showcasing solar panels that track the sun and innovative wind turbines in the background](example.url)\n\n## پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها\n\nیکی از عوامل کلیدی در رشد انرژی\u200cهای تجدیدپذیر در سال 2025، پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها خواهد بود. با توسعه فناوری\u200cهای نوین مانند پنل\u200cهای خورشیدی با کارایی بالا و توربین\u200cهای بادی قوی\u200cتر، امکان تولید انرژی با هزینه\u200cهای کمتر فراهم خواهد شد. این پیشرفت\u200cها به ویژه در کشورهای در حال توسعه که به شدت به منابع انرژی جدید نیاز دارند، حائز اهمیت است.\n\nکاهش هزینه\u200cهای تولید و نصب پنل\u200cهای خورشیدی و تجهیزات بادی تنها یکی از جنبه\u200cهای این تحولات است. به عنوان مثال، بسیاری از شرکت\u200cها به بهینه\u200cسازی زنجیره تأمین خود پرداخته\u200cاند تا هزینه تمام\u200cشده تولید را به حداقل برسانند. در نتیجه، با کاهش هزینه، دسترسی به انرژی\u200cهای تجدیدپذیر برای عموم مردم آسان\u200cتر خواهد شد. این روند می\u200cتواند تأثیر زیادی بر پذیرش این نوع انرژی در سطح جامعه داشته باشد.\n\nدیگر جنبه مهم فناوری، بهبود روش\u200cهای ذخیره\u200cسازی انرژی است. با توسعه باتری\u200cهای کارآمدتر و سیستم\u200cهای ذخیره\u200cسازی بزرگ مقیاس، امکان استفاده از انرژی\u200cهای تجدیدپذیر به عنوان منبع اصلی تأمین انرژی فراهم می\u200cشود. به این ترتیب، نوسانات انرژی که به دلیل عدم ثبات در تولید منابع تجدیدپذیر به وجود می\u200cآید، به راحتی مدیریت خواهد شد و وابستگی به سوخت\u200cهای فسیلی به شدت کاهش می\u200cیابد.\n\n## پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر\n\nیکی دیگر از روندهای قابل توجه در سال 2025، پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر در صنایع و کسب\u200cوکارها خواهد بود. با توجه به فشارهای اجتماعی و اقتصادی برای کاهش انتشار کربن، شرکت\u200cها به سرعت به سمت استفاده از منابع انرژی پاک\u200cتر حرکت می\u200cکنند. این تغییرات نه تنها به آن\u200cها کمک می\u200cکند تا در راستای مسئولیت اجتماعی خود قدم بردارند بلکه همچنین می\u200cتواند هزینه\u200cها را کاهش دهد و مزیت\u200cهای رقابتی ایجاد کند.\n\nعلاوه بر این، بسیاری از صنایع به سمت عرضه انرژی\u200cهای تجدیدپذیر در محصولات و خدمات خود گام بر می\u200cدارند. به عنوان مثال، تولید خودروهای الکتریکی با استفاده از پنل\u200cهای خورشیدی برای شارژ و سیستم\u200cهای مدیریت هوشمند انرژی، روز به روز در حال گسترش است. این امر منجر به پیدایش نوآوری\u200cهای جدید و افزایش تقاضا برای انرژی\u200cهای پاک\u200cتر خواهد شد.\n\nسرمایه\u200cگذاری در زیرساخت\u200cهای انرژی تجدیدپذیر نیز در حال افزایش است. دولت\u200cها و نهادهای خصوصی به دنبال تأمین مالی پروژه\u200cهای انرژی پاک هستند تا به اهداف کاهش انتشار کربن و ایجاد محیط زیست سالم\u200cتر دست یابند. این روند به شکل\u200cگیری شبکه\u200cهای انرژی محلی و پایدار کمک می\u200cکند که می\u200cتواند به توسعه جوامع محلی و کاهش نابرابری\u200cهای اقتصادی منجر شود.\n\n![IMAGE_PROMPT: advanced renewable energy technology being adopted in an urban setting, showing electric vehicles charging at solar stations and buildings with green roofs](example.url)\n\n## چالش\u200cها و فرصت\u200cها\n\nاگرچه چشم\u200cانداز انرژی تجدیدپذیر در سال 2025 روشن به نظر می\u200cرسد، اما چالش\u200cهایی نیز وجود دارد که باید به آن\u200cها توجه شود. یکی از بزرگ\u200cترین چالش\u200cها، نیاز به اصلاحات قانونی و سیاست\u200cگذاری\u200cهای پایدار است. بسیاری از کشورها هنوز برای پذیرش انرژی\u200cهای تجدیدپذیر به اصلاحات اساسی نیاز دارند تا موانع موجود را برطرف کنند. همچنین، تغییر در رفتار مصرف\u200cکنندگان و عادت\u200cهای اجتماعی برای پذیرش این نوع انرژی لازم است.\n\nعلاوه بر این، تأمین مالی پروژه\u200cهای انرژی تجدیدپذیر در مناطق مختلف جهان یک چالش عمده به شمار می\u200cآید. کشورهای در حال توسعه به دلیل محدودیت\u200cهای مالی و دسترسی به منابع، ممکن است نتوانند به\u200cطور مؤثری از انرژی\u200cهای تجدیدپذیر بهره\u200cبرداری کنند. در این راستا، همکاری\u200cهای بین\u200cالمللی و ایجاد مدل\u200cهای مالی جدید می\u200cتواند به حل این مشکل کمک کند و به آنها ابتکار عمل در توسعه پایدار را بدهد.\n\nدر نهایت، چالش دیگری که باید به آن توجه شود، حفاظت از محیط زیست در هنگام استفاده از منابع تجدیدپذیر است. به عنوان مثال، پیاده\u200cسازی پروژه\u200cهای بزرگ بادی و خورشیدی ممکن است به اکوسیستم\u200cهای محلی آسیب برساند. بنابراین، در کنار خروج از سوخت\u200cهای فسیلی، ضروری است که رویکردی چندجانبه برای محافظت از منابع طبیعی و تنوع زیستی در پیش گرفته شود.\n\n## نتیجه\u200cگیری\n\nروندهای انرژی تجدیدپذیر در سال 2025 به شکل قابل توجهی منجر به تغییر شیوه تأمین انرژی در جهان خواهند شد. پیشرفت\u200cهای فناوری، پذیرش گسترده\u200cتر و سرمایه\u200cگذاری در زیرساخت\u200cها از جمله عواملی هستند که می\u200cتوانند نسل جدیدی از انرژی\u200cهای پاک و پایدار را به وجود آورند. در عین حال، اطمینان از توسعه پایدار و محافظت از محیط زیست از جمله چالش\u200cهایی است که باید بر آن فائق آمد.\n\nدر نهایت، انرژی\u200cهای تجدیدپذیر نه تنها به کاهش انتشار کربن و ایجاد جهانی پاک\u200cتر کمک می\u200cکنند بلکه می\u200cتوانند به ایجاد فرصت\u200cهای جدید شغلی و بهبود کیفیت زندگی در سراسر جهان بینجامند. با توجه به چالش\u200cها و فرصت\u200cها، آینده انرژی\u200cهای تجدیدپذیر بسیار امیدوارکننده به نظر می\u200cرسد و تمامی جوانب زندگی بشر را تحت تأثیر قرار خواهد داد.'
+            
+            
+    #         parts = re.split(r'(!\[.*?\]\(.*?\))', generated_blog, flags=re.DOTALL)
+    #         content = []
+    #         for part in parts:
+    #             if not part.strip():  # skip empty parts
+    #                 continue
+
+    #             # Check if this part is an image
+    #             match = re.match(r'!\[(.*?)\]\((.*?)\)', part)
+    #             if match:
+    #                 alt_text = match.group(1)
+    #                 src = match.group(2)
+    #                 content.append({
+    #                     "heading": "",
+    #                     "body": "",
+    #                     "media" : {"type":"image","prompt": alt_text, "url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
+                        
+    #                 })
+
+    #             else:
+    #                 # Convert the Markdown text to HTML if you want, or keep as raw text
+    #                 html_text = markdown.markdown(part, extensions=["extra", "codehilite","toc"])
+    #                 content.append({
+    #                     "heading": "",
+    #                     "body": html_text,
+    #                     "media" : {"type":"","prompt":"","url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
+    #                 })
+
+    #         content[0]['heading'] = content[0]['body'].split('\n')[0].strip()
+            
+    #         image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+    #         print(content)
+            
+            
+    #         blog_data = {
+    #             'title': generated_blog.split('\n')[0].replace('#' , '').strip(),  # Using response as title
+    #             'image_url': image_url,
+    #             'content': content,
+    #         }
+            
+    #         # Use your serializer to create the blog
+    #         serializer = BlogSerializer(data=blog_data, context={'request': request})
+    #         if serializer.is_valid():
+    #             blog = serializer.save()
+    #             blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'}
+    #             blog.blog_type = 'webpage'
+    #             blog.save()
+    #             # Attach documents specified in request
+    #             attached_count = 0
+    #             for doc_id in temp_doc_ids:
+    #                 try:
+    #                     doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
+    #                     doc.mark_as_attached(blog)
+    #                     attached_count += 1
+    #                 except DocumentContent.DoesNotExist:
+    #                     continue
+
+    #             return Response(BlogSerializer(blog).data)
+    #         else:
+    #             return JsonResponse({
+    #                 'error': 'Failed to create blog',
+    #                 'details': serializer.errors,
+    #                 'status': 'failed'
+    #             }, status=400)
 
     #     except Exception as e:
     #         print(str(e))
@@ -584,181 +720,6 @@ class BlogViewSet(viewsets.ModelViewSet):
     #             {'error': str(e)},
     #             status=status.HTTP_500_INTERNAL_SERVER_ERROR
     #         )
-    
-    @action(detail=False, methods=['post'])
-    def generate_webpage_content(self, request):
-        try:
-            # blog = self.get_object()
-            prompt = request.data.get('prompt')
-            language = request.data.get('language')
-            temp_doc_ids = request.data.get('documents')  # list of UUIDs to attach
-            print(request.data)
-            # time.sleep(5)
-
-            if not prompt:
-                return Response(
-                    {'error': 'prompt is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Delete all other temporary documents of this admin that were not selected
-            other_docs = DocumentContent.objects.filter(
-                is_temporary=True,
-                blog__isnull=True,
-                user=request.user
-            ).exclude(uuid__in=temp_doc_ids)
-            deleted_count, _ = other_docs.delete()
-            
-
-            # blog = Blog.objects.create(
-            #     title="Generating...",
-            #     blog_type="webpage",
-            #     admin=request.user
-            # )
-            # blog_data = {
-            #     'title': "Generating...",
-            #     'blog_type': 'webpage',
-            #     'settings':{'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'},
-            # }
-            
-            # # Use your serializer to create the blog
-            # serializer = BlogSerializer(data=blog_data, context={'request': request})
-            # if serializer.is_valid():
-                # blog = serializer.save()
-                
-            documents = ""
-            for doc_id in temp_doc_ids:
-                try:
-                    doc_text = ""
-                    doc = DocumentContent.objects.get(uuid=doc_id , is_temporary=True)
-                    print(doc.type)
-                    if doc.type == 'IMG':
-                        doc_text = doc.text_content
-                        
-                        # doc.save()
-                    else:
-                    #     chunks = split_text_into_chunks(doc.text_content) #splitter.split_text(doc.text_content)
-                    #     if len(chunks) < 2:
-                    #         doc_text = doc.text_content
-                    #     else:
-                    #         if count_tokens(chunks[-1]) < 10000:
-                    #             chunks[-2] += " " + chunks[-1]
-                    #             chunks.pop(-1)
-                            
-                    #         summaries = []
-                    #         for i, chunk in enumerate(chunks):
-                    #             print(f"⏳ Summarizing chunk {i+1}/{len(chunks)} ...")
-                    #             try:
-                    #                 summary = summarize_chunk(chunk)
-                    #                 summaries.append(summary)
-                    #                 doc_text += summary['summarizes_text'] + "\n"
-                    #             except Exception as e:
-                    #                 print(f"❌ Error summarizing chunk {i+1}: {e}")
-
-                    #         print("✅ All chunks summarized successfully")
-                    #         doc.summaries = summaries
-                    #         doc.save()
-                        doc_text = doc.text_content
-                    documents += f"Document `{doc.title}`:\n```\n{doc_text}\n```"
-                        
-                except DocumentContent.DoesNotExist:
-                    continue
-            documents = truncate_by_tokens(documents ,90000 ,count_tokens(documents))
-            print(documents)
-
-            generated_blog = generate_webpage(prompt=prompt ,docs= documents,language=language)
-            
-                # async_task(
-                #     "blog.tasks.generate_webpage_task",
-                #     prompt,
-                #     documents,
-                #     language,
-                #     blog.id
-                # ) 
-                # # blog.slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
-                # # blog.save()
-                 
-                # return Response(BlogSerializer(blog).data)
-
-            # else:
-            #     return JsonResponse({
-            #         'error': 'Failed to create blog',
-            #         'details': serializer.errors,
-            #         'status': 'failed'
-            #     }, status=400)
-            # generated_blog = '## روندهای انرژی تجدیدپذیر در سال 2025\n\nانرژی\u200cهای تجدیدپذیر طی سال\u200cهای اخیر به یک محور اصلی در سیاست\u200cهای جهانی و توسعه پایدار تبدیل شده\u200cاند. با پیشرفت\u200cهای تکنولوژیکی، تغییرات جوی و فشارهای اقتصادی، جهان به سوی استفاده از منابع انرژی پاک\u200cتر و پایدارتر روی آورده است. در سال 2025، انتظار می\u200cرود که این روندها به شکل قابل توجهی تغییر کنند و نوآوری\u200cهایی در زمینه انرژی به وجود آید که نه تنها بر روی سیاست\u200cهای ملی تأثیر بگذارد بلکه بر روی سبک زندگی روزمره انسان\u200cها نیز تأثیرگذار باشد.\n\nتکنولوژی\u200cهای جدید بر پایه انرژی\u200cهای تجدیدپذیر به ما این امکان را می\u200cدهند که از منابعی چون خورشید، باد، آب و بیوماس استفاده بیشتری کنیم. در این راستا، پیشرفت\u200cها در زمینه ذخیره\u200cسازی انرژی و کارایی سیستم\u200cها به ما کمک خواهد کرد تا بتوانیم از این منابع به شکل مؤثرتری استفاده کنیم. با استفاده از انرژی تجدیدپذیر، جامعه\u200cای با انتشار کربن کمتر و محیط زیست پاک\u200cتر ساخته می\u200cشود.\n\nپیش\u200cبینی می\u200cشود که در سال 2025، انرژی خورشیدی و بادی به عنوان دو منبع اصلی انرژی تجدیدپذیر در بسیاری از کشورها شناخته شوند. این دو منبع قادر به تأمین بخش عمده\u200cای از نیازهای انرژی کشورهای پیشرفته و در حال توسعه خواهند بود و بدین ترتیب، همچنین موجب بهبود امنیت انرژی و کاهش وابستگی به سوخت\u200cهای فسیلی خواهند شد.\n\n![IMAGE_PROMPT: a futuristic solar panel farm with advanced technology, showcasing solar panels that track the sun and innovative wind turbines in the background](example.url)\n\n## پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها\n\nیکی از عوامل کلیدی در رشد انرژی\u200cهای تجدیدپذیر در سال 2025، پیشرفت\u200cهای فناوری و کاهش هزینه\u200cها خواهد بود. با توسعه فناوری\u200cهای نوین مانند پنل\u200cهای خورشیدی با کارایی بالا و توربین\u200cهای بادی قوی\u200cتر، امکان تولید انرژی با هزینه\u200cهای کمتر فراهم خواهد شد. این پیشرفت\u200cها به ویژه در کشورهای در حال توسعه که به شدت به منابع انرژی جدید نیاز دارند، حائز اهمیت است.\n\nکاهش هزینه\u200cهای تولید و نصب پنل\u200cهای خورشیدی و تجهیزات بادی تنها یکی از جنبه\u200cهای این تحولات است. به عنوان مثال، بسیاری از شرکت\u200cها به بهینه\u200cسازی زنجیره تأمین خود پرداخته\u200cاند تا هزینه تمام\u200cشده تولید را به حداقل برسانند. در نتیجه، با کاهش هزینه، دسترسی به انرژی\u200cهای تجدیدپذیر برای عموم مردم آسان\u200cتر خواهد شد. این روند می\u200cتواند تأثیر زیادی بر پذیرش این نوع انرژی در سطح جامعه داشته باشد.\n\nدیگر جنبه مهم فناوری، بهبود روش\u200cهای ذخیره\u200cسازی انرژی است. با توسعه باتری\u200cهای کارآمدتر و سیستم\u200cهای ذخیره\u200cسازی بزرگ مقیاس، امکان استفاده از انرژی\u200cهای تجدیدپذیر به عنوان منبع اصلی تأمین انرژی فراهم می\u200cشود. به این ترتیب، نوسانات انرژی که به دلیل عدم ثبات در تولید منابع تجدیدپذیر به وجود می\u200cآید، به راحتی مدیریت خواهد شد و وابستگی به سوخت\u200cهای فسیلی به شدت کاهش می\u200cیابد.\n\n## پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر\n\nیکی دیگر از روندهای قابل توجه در سال 2025، پذیرش گسترده\u200cتر انرژی\u200cهای تجدیدپذیر در صنایع و کسب\u200cوکارها خواهد بود. با توجه به فشارهای اجتماعی و اقتصادی برای کاهش انتشار کربن، شرکت\u200cها به سرعت به سمت استفاده از منابع انرژی پاک\u200cتر حرکت می\u200cکنند. این تغییرات نه تنها به آن\u200cها کمک می\u200cکند تا در راستای مسئولیت اجتماعی خود قدم بردارند بلکه همچنین می\u200cتواند هزینه\u200cها را کاهش دهد و مزیت\u200cهای رقابتی ایجاد کند.\n\nعلاوه بر این، بسیاری از صنایع به سمت عرضه انرژی\u200cهای تجدیدپذیر در محصولات و خدمات خود گام بر می\u200cدارند. به عنوان مثال، تولید خودروهای الکتریکی با استفاده از پنل\u200cهای خورشیدی برای شارژ و سیستم\u200cهای مدیریت هوشمند انرژی، روز به روز در حال گسترش است. این امر منجر به پیدایش نوآوری\u200cهای جدید و افزایش تقاضا برای انرژی\u200cهای پاک\u200cتر خواهد شد.\n\nسرمایه\u200cگذاری در زیرساخت\u200cهای انرژی تجدیدپذیر نیز در حال افزایش است. دولت\u200cها و نهادهای خصوصی به دنبال تأمین مالی پروژه\u200cهای انرژی پاک هستند تا به اهداف کاهش انتشار کربن و ایجاد محیط زیست سالم\u200cتر دست یابند. این روند به شکل\u200cگیری شبکه\u200cهای انرژی محلی و پایدار کمک می\u200cکند که می\u200cتواند به توسعه جوامع محلی و کاهش نابرابری\u200cهای اقتصادی منجر شود.\n\n![IMAGE_PROMPT: advanced renewable energy technology being adopted in an urban setting, showing electric vehicles charging at solar stations and buildings with green roofs](example.url)\n\n## چالش\u200cها و فرصت\u200cها\n\nاگرچه چشم\u200cانداز انرژی تجدیدپذیر در سال 2025 روشن به نظر می\u200cرسد، اما چالش\u200cهایی نیز وجود دارد که باید به آن\u200cها توجه شود. یکی از بزرگ\u200cترین چالش\u200cها، نیاز به اصلاحات قانونی و سیاست\u200cگذاری\u200cهای پایدار است. بسیاری از کشورها هنوز برای پذیرش انرژی\u200cهای تجدیدپذیر به اصلاحات اساسی نیاز دارند تا موانع موجود را برطرف کنند. همچنین، تغییر در رفتار مصرف\u200cکنندگان و عادت\u200cهای اجتماعی برای پذیرش این نوع انرژی لازم است.\n\nعلاوه بر این، تأمین مالی پروژه\u200cهای انرژی تجدیدپذیر در مناطق مختلف جهان یک چالش عمده به شمار می\u200cآید. کشورهای در حال توسعه به دلیل محدودیت\u200cهای مالی و دسترسی به منابع، ممکن است نتوانند به\u200cطور مؤثری از انرژی\u200cهای تجدیدپذیر بهره\u200cبرداری کنند. در این راستا، همکاری\u200cهای بین\u200cالمللی و ایجاد مدل\u200cهای مالی جدید می\u200cتواند به حل این مشکل کمک کند و به آنها ابتکار عمل در توسعه پایدار را بدهد.\n\nدر نهایت، چالش دیگری که باید به آن توجه شود، حفاظت از محیط زیست در هنگام استفاده از منابع تجدیدپذیر است. به عنوان مثال، پیاده\u200cسازی پروژه\u200cهای بزرگ بادی و خورشیدی ممکن است به اکوسیستم\u200cهای محلی آسیب برساند. بنابراین، در کنار خروج از سوخت\u200cهای فسیلی، ضروری است که رویکردی چندجانبه برای محافظت از منابع طبیعی و تنوع زیستی در پیش گرفته شود.\n\n## نتیجه\u200cگیری\n\nروندهای انرژی تجدیدپذیر در سال 2025 به شکل قابل توجهی منجر به تغییر شیوه تأمین انرژی در جهان خواهند شد. پیشرفت\u200cهای فناوری، پذیرش گسترده\u200cتر و سرمایه\u200cگذاری در زیرساخت\u200cها از جمله عواملی هستند که می\u200cتوانند نسل جدیدی از انرژی\u200cهای پاک و پایدار را به وجود آورند. در عین حال، اطمینان از توسعه پایدار و محافظت از محیط زیست از جمله چالش\u200cهایی است که باید بر آن فائق آمد.\n\nدر نهایت، انرژی\u200cهای تجدیدپذیر نه تنها به کاهش انتشار کربن و ایجاد جهانی پاک\u200cتر کمک می\u200cکنند بلکه می\u200cتوانند به ایجاد فرصت\u200cهای جدید شغلی و بهبود کیفیت زندگی در سراسر جهان بینجامند. با توجه به چالش\u200cها و فرصت\u200cها، آینده انرژی\u200cهای تجدیدپذیر بسیار امیدوارکننده به نظر می\u200cرسد و تمامی جوانب زندگی بشر را تحت تأثیر قرار خواهد داد.'
-            
-            
-            parts = re.split(r'(!\[.*?\]\(.*?\))', generated_blog, flags=re.DOTALL)
-            content = []
-            for part in parts:
-                if not part.strip():  # skip empty parts
-                    continue
-
-                # Check if this part is an image
-                match = re.match(r'!\[(.*?)\]\((.*?)\)', part)
-                if match:
-                    alt_text = match.group(1)
-                    src = match.group(2)
-                    content.append({
-                        "heading": "",
-                        "body": "",
-                        "media" : {"type":"image","prompt": alt_text, "url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
-                        
-                    })
-
-                else:
-                    # Convert the Markdown text to HTML if you want, or keep as raw text
-                    html_text = markdown.markdown(part, extensions=["extra", "codehilite","toc"])
-                    content.append({
-                        "heading": "",
-                        "body": html_text,
-                        "media" : {"type":"","prompt":"","url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
-                    })
-
-            content[0]['heading'] = content[0]['body'].split('\n')[0].strip()
-            
-            image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
-            print(content)
-            
-            
-            blog_data = {
-                'title': generated_blog.split('\n')[0].replace('#' , '').strip(),  # Using response as title
-                'image_url': image_url,
-                'content': content,
-            }
-            
-            # Use your serializer to create the blog
-            serializer = BlogSerializer(data=blog_data, context={'request': request})
-            if serializer.is_valid():
-                blog = serializer.save()
-                blog.settings = {'containerWidth':'1000px', 'language':f"{'fa' if language == 'فارسی' else 'en'}",'theme':'purple-haze'}
-                blog.blog_type = 'webpage'
-                blog.save()
-                # Attach documents specified in request
-                attached_count = 0
-                for doc_id in temp_doc_ids:
-                    try:
-                        doc = DocumentContent.objects.get(uuid=doc_id, is_temporary=True)
-                        doc.mark_as_attached(blog)
-                        attached_count += 1
-                    except DocumentContent.DoesNotExist:
-                        continue
-
-                return Response(BlogSerializer(blog).data)
-            else:
-                return JsonResponse({
-                    'error': 'Failed to create blog',
-                    'details': serializer.errors,
-                    'status': 'failed'
-                }, status=400)
-
-        except Exception as e:
-            print(str(e))
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
     
     
     @action(detail=True, methods=['post'])
@@ -801,6 +762,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         print(files)
         for file in files:
             extracted_text = ""
+            summarize_text = ""
 
             # Check file type
             if file.content_type.startswith("image/"):
@@ -812,9 +774,11 @@ class BlogViewSet(viewsets.ModelViewSet):
                         extracted_text = description['result']['caption'] + "Also document contains below text:\n"
                 except Exception as e:
                     return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                    # return Response({'error': 'We can work on image description write know'}, status=status.HTTP_404_NOT_FOUND)
+                    
                 extracted_text += pytesseract.image_to_string(image, lang='fas+eng') 
                 doc_type = 'IMG'
+
+                summarize_text = extracted_text 
             elif file.content_type == "application/pdf":
                 # text = ""
                 with pdfplumber.open(file) as pdf:
@@ -825,16 +789,22 @@ class BlogViewSet(viewsets.ModelViewSet):
                         extracted_text += get_display(raw) + "\n"
                         
                 doc_type = 'PDF'
+                print(f'summarizing document: {file.name}')
+                # summarize_text = extracted_text
+                summarize_text = summarize_document(truncate_by_tokens(extracted_text ,90000 ,count_tokens(extracted_text)))
             elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 docx = DocxDocument(file)
                 extracted_text = "\n".join([p.text for p in docx.paragraphs])
                 doc_type = 'DOCX'
+
+                print(f'summarizing document: {file.name}')
+                summarize_text = summarize_document(truncate_by_tokens(extracted_text ,90000 ,count_tokens(extracted_text)))
             else:
                 return Response({'error': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
-                # continue  # skip unsupported files
+                
             
 
-            # chunks = splitter.split_text(extracted_text)
+            
 
             # 2. Create the DocumentContent object with all required fields
             doc = DocumentContent.objects.create(
@@ -842,13 +812,14 @@ class BlogViewSet(viewsets.ModelViewSet):
                 title=file.name,            # <– required CharField
                 type=doc_type,              # <– required ChoiceField
                 text_content=extracted_text,
+                summarize_text=summarize_text,
                 is_temporary=True
             )
              # 3. Add to return list
             created_docs.append({
                 'document_id': str(doc.uuid),
-                'title': doc.title
-                # 'text_preview': doc.text_content[:200]
+                'title': doc.title,
+                'summarize_text': doc.summarize_text
             })
 
         if not created_docs:
@@ -978,6 +949,138 @@ class BlogViewSet(viewsets.ModelViewSet):
         blog.save(update_fields=['content'])
 
         return Response({'url': media_url})
+ 
+    @action(detail=False, methods=['post'])
+    def generate_image(self, request):
+
+        print(request.data)
+        prompt = request.data.get('prompt')  
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        api = FourOImageAPI()
+        task_id = api.generate_image(
+            prompt=prompt,
+            size='3:2',
+            nVariants=1,
+            isEnhance=True,
+            enableFallback=True
+            )
+        return Response(task_id) 
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def image_status(self, request):
+        print(request)
+        task_id = request.GET.get("taskId")
+
+        image_api = FourOImageAPI()
+        status = image_api.get_task_status(task_id)
+        
+        return Response(status)
+
+    # STREAMING CHAT ACTION
+    @action(detail=True,methods=["get"],url_path="chat/stream")
+    def chat_stream(self, request, slug=None):
+        blog = self.get_object()
+        admin = Admin.objects.get(user=self.request.user)
+        # user_message = request.data.get("message", "")
+        # print(user_message)
+        prompt = blog.settings['user_prompt']
+        language = blog.settings['language']
+        language = 'فارسی' if language == 'fa' else 'English'
+        setting_prompt = admin.webpage_prompt
+        docs = DocumentContent.objects.filter(blog=blog.id, is_temporary=False) 
+
+        documents = ""
+        for doc in docs:
+            try:
+                print(doc.type)
+                documents += f"Document `{doc.title}`:\n```\n{doc.summarize_text}\n```"
+                doc.mark_as_attached(blog)
+
+            except DocumentContent.DoesNotExist:
+                continue
+
+        documents = truncate_by_tokens(documents ,90000 ,count_tokens(documents))
+        print(documents)
+
+        metis_api_key = getattr(settings, 'METIS_API', None)
+        client = OpenAI(api_key = metis_api_key, base_url="https://api.metisai.ir/openai/v1")
+
+        def stream():
+            full_text = []
+
+            try:
+                message = _build_messages_for_webpageـblog(prompt=prompt,docs=documents,language=language, setting_prompt= setting_prompt)
+                print(message)
+                response = client.responses.create(
+                    model="gpt-4o-mini",
+                    stream=True,
+                    input=message,
+                )
+                for event in response:
+                    if event.type == "response.output_text.delta":
+                        full_text.append(event.delta)
+                        yield event.delta
+
+            except Exception as e:
+                print(str(e))
+                yield "\n\n[ERROR: generation failed]"
+
+            finally:
+                final_text = "".join(full_text)
+                if final_text.strip():
+                    print(final_text)
+
+                    parts = re.split(r'(!\[.*?\]\(.*?\))', final_text, flags=re.DOTALL)
+                    content = []
+                    for part in parts:
+                        if not part.strip():  # skip empty parts
+                            continue
+
+                        # Check if this part is an image
+                        match = re.match(r'!\[(.*?)\]\((.*?)\)', part)
+                        if match:
+                            alt_text = match.group(1)
+                            src = match.group(2)
+                            content.append({
+                                "heading": "",
+                                "body": "",
+                                "media" : {"type":"image","prompt": alt_text, "url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
+                                
+                            })
+
+                        else:
+                            # Convert the Markdown text to HTML if you want, or keep as raw text
+                            html_text = markdown.markdown(part, extensions=["extra", "codehilite","toc"])
+                            content.append({
+                                "heading": "",
+                                "body": html_text,
+                                "media" : {"type":"","prompt":"","url":"","Position":"top","Width":"100%","Height":"100%",'media_task_id':""}
+                            })
+
+                    content[0]['heading'] = content[0]['body'].split('\n')[0].strip()
+
+                    
+                    image_url = "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+                    print(content)
+                            
+                    
+                    blog.content = content
+                    blog.title = final_text.split('\n')[0].replace('#' , '').strip()
+                    blog.image_url = image_url
+                    blog.readyblog = True
+                    blog.save()
+                    print('saved')
+                    
+
+        return StreamingHttpResponse(
+            stream(),
+            content_type="text/plain; charset=utf-8"
+        )
 
     @action(detail=True, methods=['post'])
     def generate_media(self, request, slug=None):

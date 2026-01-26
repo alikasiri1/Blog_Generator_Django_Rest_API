@@ -67,9 +67,9 @@ Q_CLUSTER = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -98,22 +98,22 @@ TEMPLATES = [
 WSGI_APPLICATION = 'blog_project.wsgi.application'
 
 # Database
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',   # Database
-        'USER': 'postgres',   # Username
-        'PASSWORD': os.environ['DB_PASSWORD'], 
-        'HOST': 'b35089b1-2e59-404c-b37d-83ac8cc7d968.hadb.ir',
-        'PORT': '26229',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'postgres',   # Database
+#         'USER': 'postgres',   # Username
+#         'PASSWORD': os.environ['DB_PASSWORD'], 
+#         'HOST': 'b35089b1-2e59-404c-b37d-83ac8cc7d968.hadb.ir',
+#         'PORT': '26229',
+#     }
+# }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -172,11 +172,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8004",
 ]
 CORS_ALLOW_CREDENTIALS = True
-
+   
 CSRF_TRUSTED_ORIGINS = [
     "https://royal-winona-alikasiri-750a74c5.koyeb.app",
     "https://*.koyeb.app",
-    "https://blog-generator-django-rest-api.onrender.com"
+    "https://blog-generator-django-rest-api.onrender.com",
+    "http://localhost:8004"
 ]
 
 # OpenAI settings

@@ -94,11 +94,18 @@ class AdminViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['patch'])
     def updates(self, request):
-        admin = Admin.objects.get(user=request.user)
-        serializer = self.get_serializer(admin, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        try:
+            admin = Admin.objects.get(user=request.user)
+            serializer = self.get_serializer(admin, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        except Exception as e:
+            print(str(e))
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # class CommentViewSet(viewsets.ModelViewSet):
