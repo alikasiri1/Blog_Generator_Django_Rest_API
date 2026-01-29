@@ -18,47 +18,47 @@ class FourOImageAPI:
         }
     
     def generate_image(self, **options):
-        # response = requests.post(
-        #     f'{self.base_url}/generate',
-        #     headers=self.headers,
-        #     json=options
-        # )
-        # result = response.json()
+        response = requests.post(
+            f'{self.base_url}/generate',
+            headers=self.headers,
+            json=options
+        )
+        result = response.json()
 
-        # if not response.ok or result.get('code') != 200:
-        #     raise Exception(f"Generation failed: {result.get('msg', 'Unknown error')}")
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Generation failed: {result.get('msg', 'Unknown error')}")
 
-        # return result['data']['taskId']
-        return "hfdahfhahfahfhahfahfah"
+        return result['data']['taskId']
+        # return "hfdahfhahfahfhahfahfah"
 
     def get_task_status(self, task_id):
-        # response = requests.get(
-        #     f'{self.base_url}/record-info?taskId={task_id}',
-        #     headers={'Authorization': f'Bearer {self.api_key}'},
+        response = requests.get(
+            f'{self.base_url}/record-info?taskId={task_id}',
+            headers={'Authorization': f'Bearer {self.api_key}'},
             
-        # )
-        # result = response.json()
+        )
+        result = response.json()
 
-        # if not response.ok or result.get('code') != 200:
-        #     raise Exception(f"Status check failed: {result.get('msg', 'Unknown error')}")
+        if not response.ok or result.get('code') != 200:
+            raise Exception(f"Status check failed: {result.get('msg', 'Unknown error')}")
 
-        # return result['data']
-        return {
-                                    "taskId": "task_4o_abc123",
-                                    "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
-                                    "completeTime": "2024-01-15 10:35:00",
-                                    "response": {
-                                        "resultUrls": [
-                                            # "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
-                                            "https://quera.org/media/CACHE/images/public/course/images/db6a1fea6c7540aeaa11c47eb18d2918/449eed3263985dbac10308ae824afa4b.jpg"
-                                        ]
-                                    },
-                                    "successFlag": 1,
-                                    "errorCode": None,
-                                    "errorMessage": None,
-                                    "createTime": "2024-01-15 10:30:00",
-                                    "progress": "1.00"
-                                }
+        return result['data']
+        # return {
+        #                             "taskId": "task_4o_abc123",
+        #                             "paramJson": "{\"prompt\":\"A serene mountain landscape\",\"size\":\"1:1\"}",
+        #                             "completeTime": "2024-01-15 10:35:00",
+        #                             "response": {
+        #                                 "resultUrls": [
+        #                                     # "https://res.cloudinary.com/dbezwpqgi/image/upload/v1/media/admin_images/pic_3_v0ij9t"
+        #                                     "https://quera.org/media/CACHE/images/public/course/images/db6a1fea6c7540aeaa11c47eb18d2918/449eed3263985dbac10308ae824afa4b.jpg"
+        #                                 ]
+        #                             },
+        #                             "successFlag": 1,
+        #                             "errorCode": None,
+        #                             "errorMessage": None,
+        #                             "createTime": "2024-01-15 10:30:00",
+        #                             "progress": "1.00"
+        #                         }
 
     def get_download_url(self, image_url):
         response = requests.post(
@@ -271,16 +271,7 @@ class RunwayAPI:
                 "error": str(e)
             }
 
-# def image_description(image):
-#     client_id = getattr(settings, 'CLIENT_ID', None) #or os.getenv('COHERE_API_KEY')
-#     client_secret = getattr(settings, 'CLIENT_SECRET', None) #or os.getenv('COHERE_API_KEY')
-#     data = {
-#         'data': image,
-#         "caption_len": "long"
-#         }
-    
-#     description = requests.post('https://api.everypixel.com/v1/image_captioning', files=data, auth=(client_id, client_secret)).json()
-#     return description
+
 def image_description(image_file):
     client_id = getattr(settings, 'CLIENT_ID', None)
     client_secret = getattr(settings, 'CLIENT_SECRET', None)
@@ -695,42 +686,7 @@ def generate_blog(prompt: str = "", docs: str = "", topics: list | None = None, 
 
 
 def _build_messages_for_webpageـblog(prompt: str,docs: str, setting_prompt , language: str = "English",):
-    # system_message = (
-    # "You are a professional long-form blog writer.\n"
-    # "You write cohesive, narrative-driven articles with depth.\n"
-    # f"All prose must be written in {language or 'English'}.\n\n"
 
-    # "STRICT OUTPUT RULES:\n"
-    # "- Output must be valid Markdown only.\n"
-    # "- Write ONE fully integrated blog article.\n"
-    # "- Do NOT include citations, references, or source links.\n"
-    # "- Do NOT mention reports, studies, or external sources.\n"
-    # "- Do NOT add explanations outside the blog.\n\n"
-
-    # 'CONTENT DEPTH REQUIREMENTS:\n'
-    # "- The article must be at least 1200 words.\n"
-    # "- Each main section must contain AT LEAST 3 paragraphs.\n"
-    # "- Each paragraph must contain 4–6 complete sentences.\n"
-    # "- Each paragraph must introduce new information or analysis.\n"
-    # "- Avoid repetition across paragraphs.\n\n"
-
-    # "STRUCTURE RULES:\n"
-    # "- Use a clear introduction and conclusion.\n"
-    # "- Use Markdown headings (##) for main sections.\n"
-    # "- Ensure smooth transitions between sections.\n\n"
-
-    # "IMAGE PROMPT RULES:\n"
-    # "- Images are OPTIONAL and should be used only when they improve clarity or engagement.\n"
-    # "- Do NOT include real image URLs.\n"
-    # "- When adding an image, use Markdown image syntax with the placeholder URL: example.url\n"
-    # "- The image generation prompt MUST be placed inside the image alt text.\n"
-    # "- The alt text must be a detailed, visual prompt suitable for an AI image generator.\n"
-    # "- Format exactly like this:\n"
-    # "  ![IMAGE_PROMPT: detailed image generation prompt](example.url)\n"
-    # "- Include at most ONE image per main section.\n"
-    # "- The blog must contain AT LEAST TWO images in total.\n"
-    # "- The FIRST image must appear IMMEDIATELY after the blog title (on the next line after the title) before any text content.\n"
-    # )
     system_message = f"""{setting_prompt['system']}\n
 All prose must be written in {language or 'English'}\n
 DOCUMENT INTERPRETATION RULES
