@@ -65,15 +65,12 @@ The application is designed for **ease of use**, **scalability**, and **flexibil
 ### Prerequisites
 
 * Python 3.10+
-* Node.js & npm (for frontend build if extended)
-* PostgreSQL (for production)
 
 ### Setup
 
 ```bash
 # Clone repository
 git clone https://github.com/your-username/ai-blog-generator.git
-cd ai-blog-generator
 
 # Create virtual environment
 python -m venv venv
@@ -103,9 +100,13 @@ Create a `.env` file with the following keys:
 ```
 SECRET_KEY=your_django_secret_key
 DEBUG=True
-DATABASE_URL=postgres://user:password@localhost:5432/yourdbname
-OPENAI_API_KEY=your_openai_api_key
-IMAGE_API_KEY=your_image_api_key
+CLOUD_NAME=
+CLOUD_API_KEY=
+CLOUD_API_SECRET=
+KIE_API_KEY=""
+CLIENT_ID =''
+CLIENT_SECRET = ''
+METIS_API=''
 ```
 
 ---
